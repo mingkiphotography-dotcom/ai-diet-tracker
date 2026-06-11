@@ -1,0 +1,16 @@
+{
+  "short_name": "AI健康助手",
+  "name": "AI减脂健康助手 - 智能饮食与体重管理",
+  "icons": [
+    {
+      "src": "/src/assets/react.svg",
+      "type": "image/svg+xml",
+      "sizes": "192x192 512x512"
+    }
+  ],
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#0a0b10",
+  "background_color": "#0a0b10",
+  "orientation": "portrait"
+}
