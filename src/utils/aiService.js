@@ -7,13 +7,24 @@ const getAiConfig = (explicitApiKey) => {
     if (saved) {
       const profile = JSON.parse(saved);
       const engine = profile.aiEngine || 'gemini';
-      return {
+      
+      const config = {
         aiEngine: engine,
-        apiKey: engine === 'gemini' ? (explicitApiKey || profile.apiKey || localStorage.getItem('ai_diet_api_key') || '') : (profile.apiKey || ''),
+        apiKey: profile.apiKey || (engine === 'gemini' ? explicitApiKey : '') || localStorage.getItem('ai_diet_api_key') || '',
         openaiBaseUrl: profile.openaiBaseUrl || '',
         openaiModel: profile.openaiModel || '',
-        openaiApiKey: engine === 'openai' ? (explicitApiKey || profile.openaiApiKey || '') : (profile.openaiApiKey || '')
+        openaiApiKey: profile.openaiApiKey || (engine === 'openai' && explicitApiKey && explicitApiKey.startsWith('sk-') ? explicitApiKey : '') || ''
       };
+
+      console.log('Resolved AI Config:', {
+        aiEngine: config.aiEngine,
+        openaiBaseUrl: config.openaiBaseUrl,
+        openaiModel: config.openaiModel,
+        openaiApiKeyLength: config.openaiApiKey?.length,
+        openaiApiKeyStart: config.openaiApiKey ? config.openaiApiKey.substring(0, 8) + '...' : 'none'
+      });
+
+      return config;
     }
   } catch (e) {
     console.error('Error reading AI config from localStorage:', e);
