@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, Search, X, Camera, Eye, ChevronLeft, ChevronRight, Sparkles, Wand2, Loader2, AlertCircle } from 'lucide-react';
 import { calculateNutrients, compressImage, getTodayDateString } from '../utils/helpers';
 
@@ -26,6 +26,19 @@ const DietLog = ({
   setSelectedDate
 }) => {
   const todayStr = getTodayDateString();
+  const [showCalendar, setShowCalendar] = useState(false);
+  const [calendarMonth, setCalendarMonth] = useState(() => {
+    const d = new Date(selectedDate || todayStr);
+    return new Date(d.getFullYear(), d.getMonth(), 1);
+  });
+
+  useEffect(() => {
+    if (selectedDate) {
+      const d = new Date(selectedDate);
+      setCalendarMonth(new Date(d.getFullYear(), d.getMonth(), 1));
+    }
+  }, [selectedDate]);
+
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [selectedMealSlot, setSelectedMealSlot] = useState('breakfast');
   
@@ -175,6 +188,14 @@ const DietLog = ({
     }
   };
 
+  const handlePrevMonth = () => {
+    setCalendarMonth(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
+  };
+
+  const handleNextMonth = () => {
+    setCalendarMonth(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1));
+  };
+
   const handlePrevDay = () => {
     const d = new Date(selectedDate);
     d.setDate(d.getDate() - 1);
@@ -247,16 +268,11 @@ const DietLog = ({
           <ChevronLeft size={16} />
         </button>
         
-        <input 
-          type="date" 
-          value={selectedDate} 
-          onChange={(e) => {
-            setSelectedDate(e.target.value);
-            setIsEditingWeight(false);
-          }} 
+        <div 
+          onClick={() => setShowCalendar(!showCalendar)}
           style={{ 
             background: 'var(--card-bg)',
-            border: '1px solid var(--border-color)', 
+            border: showCalendar ? '1px solid var(--color-primary)' : '1px solid var(--border-color)', 
             borderRadius: '10px', 
             padding: '8px 12px', 
             color: 'var(--text-primary)', 
@@ -264,11 +280,20 @@ const DietLog = ({
             textAlign: 'center',
             fontFamily: 'inherit',
             fontWeight: '600',
-            outline: 'none',
+            cursor: 'pointer',
             flex: 1,
-            boxShadow: '0 2px 8px rgba(0,0,0,0.02)'
+            boxShadow: '0 2px 8px rgba(0,0,0,0.02)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '6px',
+            userSelect: 'none',
+            transition: 'border-color 0.2s ease'
           }} 
-        />
+        >
+          <span>📅 {selectedDate}</span>
+          <span style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>{showCalendar ? '▲' : '▼'}</span>
+        </div>
         
         <button 
           className="btn-secondary" 
@@ -278,6 +303,116 @@ const DietLog = ({
           <ChevronRight size={16} />
         </button>
       </div>
+
+      {/* Dropdown Calendar view */}
+      {showCalendar && (
+        <div className="glass-card" style={{ padding: '14px', marginBottom: '12px', animation: 'fadeIn 0.2s ease' }}>
+          {/* Calendar Month Switcher */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+            <button 
+              className="btn-secondary" 
+              style={{ padding: '4px 8px', minWidth: 'unset', margin: 0 }} 
+              onClick={handlePrevMonth}
+            >
+              <ChevronLeft size={14} />
+            </button>
+            <span style={{ fontSize: '13px', fontWeight: 'bold', color: 'var(--text-primary)' }}>
+              {calendarMonth.getFullYear()}年{calendarMonth.getMonth() + 1}月
+            </span>
+            <button 
+              className="btn-secondary" 
+              style={{ padding: '4px 8px', minWidth: 'unset', margin: 0 }} 
+              onClick={handleNextMonth}
+            >
+              <ChevronRight size={14} />
+            </button>
+          </div>
+          
+          {/* Weekday Headers */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '4px', textAlign: 'center', marginBottom: '6px' }}>
+            {['一', '二', '三', '四', '五', '六', '日'].map(w => (
+              <span key={w} style={{ fontSize: '11px', color: 'var(--text-secondary)', fontWeight: 'bold' }}>{w}</span>
+            ))}
+          </div>
+          
+          {/* Calendar Day Grid */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '4px' }}>
+            {(() => {
+              const year = calendarMonth.getFullYear();
+              const month = calendarMonth.getMonth();
+              const firstDayIndex = new Date(year, month, 1).getDay();
+              const startOffset = firstDayIndex === 0 ? 6 : firstDayIndex - 1;
+              const daysInMonth = new Date(year, month + 1, 0).getDate();
+              
+              const cells = [];
+              // Add empty cells
+              for (let j = 0; j < startOffset; j++) {
+                cells.push(<div key={`empty-${j}`} style={{ height: '36px' }} />);
+              }
+              // Add day cells
+              for (let day = 1; day <= daysInMonth; day++) {
+                const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                
+                // Check if recorded
+                const hasDiet = dietLogs[dateStr] && dietLogs[dateStr].length > 0;
+                const hasWeight = weightLogs.some(w => w.date === dateStr);
+                const hasBurned = burnedLogs[dateStr] !== undefined;
+                const hasSleep = sleepLogs[dateStr] !== undefined;
+                const isRecorded = hasDiet || hasWeight || hasBurned || hasSleep;
+                
+                const isSelected = dateStr === selectedDate;
+                const isToday = dateStr === todayStr;
+                
+                cells.push(
+                  <button
+                    key={`day-${day}`}
+                    onClick={() => {
+                      setSelectedDate(dateStr);
+                      setIsEditingWeight(false);
+                      setShowCalendar(false);
+                    }}
+                    style={{
+                      background: isSelected ? 'var(--color-primary)' : 'rgba(255,255,255,0.02)',
+                      border: isToday ? '1px solid var(--color-primary)' : '1px solid rgba(255,255,255,0.04)',
+                      borderRadius: '8px',
+                      padding: 0,
+                      height: '36px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                      position: 'relative',
+                      margin: 0,
+                      color: 'inherit',
+                      outline: 'none'
+                    }}
+                  >
+                    <span style={{ 
+                      fontSize: '11px', 
+                      fontWeight: isSelected || isToday ? 'bold' : 'normal',
+                      color: isSelected ? '#fff' : (isToday ? 'var(--color-primary)' : 'var(--text-primary)')
+                    }}>
+                      {day}
+                    </span>
+                    {isRecorded && (
+                      <span style={{ 
+                        position: 'absolute', 
+                        bottom: '3px', 
+                        width: '4px', 
+                        height: '4px', 
+                        borderRadius: '50%', 
+                        background: isSelected ? '#fff' : 'var(--color-primary)' 
+                      }} />
+                    )}
+                  </button>
+                );
+              }
+              return cells;
+            })()}
+          </div>
+        </div>
+      )}
 
       {selectedDate !== todayStr && (
         <button 
