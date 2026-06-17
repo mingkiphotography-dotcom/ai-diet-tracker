@@ -366,7 +366,7 @@ function App() {
         </div>
         <div className="header-badge">
           <Sparkles size={12} />
-          <span>v1.3.3</span>
+          <span>v1.3.4</span>
         </div>
       </header>
 
