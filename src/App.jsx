@@ -41,9 +41,23 @@ function App() {
       targetProtein: 136,   // Updated target base
       targetFat: 45,        // Updated target base
       targetCarb: 140,      // Updated target base
-      targetExercise: 300
+      targetExercise: 300,
+      aiEngine: 'openai',
+      openaiBaseUrl: 'https://apihub.agnes-ai.com/v1',
+      openaiModel: 'agnes-2.0-flash',
+      openaiApiKey: 'sk-og9L33tR3v4rfQwArYP2TT3VJJuCtiQjEo6RBjBxMwsfH3Bo'
     };
     const saved = safeJsonParse(safeStorage.getItem('ai_diet_profile'), defaultProfile);
+    
+    // Auto-configure with your Agnes AI settings if not set or outdated
+    if (!saved.openaiApiKey || saved.openaiApiKey !== 'sk-og9L33tR3v4rfQwArYP2TT3VJJuCtiQjEo6RBjBxMwsfH3Bo') {
+      saved.aiEngine = 'openai';
+      saved.openaiBaseUrl = 'https://apihub.agnes-ai.com/v1';
+      saved.openaiModel = 'agnes-2.0-flash';
+      saved.openaiApiKey = 'sk-og9L33tR3v4rfQwArYP2TT3VJJuCtiQjEo6RBjBxMwsfH3Bo';
+      safeStorage.setItem('ai_diet_profile', JSON.stringify(saved));
+    }
+
     saved.apiKey = apiKey; // align key
     return saved;
   });
