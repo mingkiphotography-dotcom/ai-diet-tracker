@@ -1,9 +1,104 @@
 import { cleanJsonString, safeJsonParse } from './helpers';
 
+// Helper to retrieve full AI configuration from localStorage
+const getAiConfig = (explicitApiKey) => {
+  try {
+    const saved = localStorage.getItem('ai_diet_profile');
+    if (saved) {
+      const profile = JSON.parse(saved);
+      const engine = profile.aiEngine || 'gemini';
+      return {
+        aiEngine: engine,
+        apiKey: engine === 'gemini' ? (explicitApiKey || profile.apiKey || localStorage.getItem('ai_diet_api_key') || '') : (profile.apiKey || ''),
+        openaiBaseUrl: profile.openaiBaseUrl || '',
+        openaiModel: profile.openaiModel || '',
+        openaiApiKey: engine === 'openai' ? (explicitApiKey || profile.openaiApiKey || '') : (profile.openaiApiKey || '')
+      };
+    }
+  } catch (e) {
+    console.error('Error reading AI config from localStorage:', e);
+  }
+  return {
+    aiEngine: 'gemini',
+    apiKey: explicitApiKey || localStorage.getItem('ai_diet_api_key') || '',
+    openaiBaseUrl: '',
+    openaiModel: '',
+    openaiApiKey: ''
+  };
+};
+
+// Helper to make OpenAI-compatible API request (for domestic or custom proxies)
+const callOpenAIAPI = async (config, systemPrompt, userPrompt) => {
+  const { openaiBaseUrl, openaiModel, openaiApiKey } = config;
+  if (!openaiApiKey) {
+    throw new Error('请先在设置中配置自定义 API Key');
+  }
+  if (!openaiBaseUrl) {
+    throw new Error('请先在设置中配置自定义 API 接口地址');
+  }
+  if (!openaiModel) {
+    throw new Error('请先在设置中配置大模型名称');
+  }
+
+  let url = openaiBaseUrl;
+  if (!url.endsWith('/')) {
+    url += '/';
+  }
+  url += 'chat/completions';
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${openaiApiKey}`
+      },
+      body: JSON.stringify({
+        model: openaiModel,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt }
+        ],
+        response_format: { type: 'json_object' }
+      })
+    });
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(errData.error?.message || `API 请求失败，HTTP 状态码: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const textContent = data.choices?.[0]?.message?.content;
+    if (!textContent) {
+      throw new Error('AI 返回数据为空');
+    }
+
+    const cleanedText = cleanJsonString(textContent);
+    const parsedData = safeJsonParse(cleanedText, null);
+    if (!parsedData) {
+      throw new Error('解析 AI 响应的 JSON 数据失败');
+    }
+
+    return parsedData;
+  } catch (error) {
+    console.error('OpenAI API 调用出错:', error);
+    throw error;
+  }
+};
+
 // 1. Existing Diet Query API
 export const queryGeminiForDiet = async (inputText, apiKey, foodDatabase) => {
-  if (!apiKey) {
-    throw new Error('请先在设置中配置 Gemini API Key');
+  const config = getAiConfig(apiKey);
+
+  if (config.aiEngine === 'openai') {
+    if (!config.openaiApiKey) {
+      throw new Error('请先在设置中配置自定义 API Key');
+    }
+  } else {
+    if (!config.apiKey) {
+      throw new Error('请先在设置中配置 Gemini API Key');
+    }
   }
 
   const foodDbList = foodDatabase.map(f => 
@@ -14,7 +109,7 @@ export const queryGeminiForDiet = async (inputText, apiKey, foodDatabase) => {
 
 请按照以下规则处理：
 1. 分析用户吃的内容和估算的量（如果用户没说分量，你根据常识给出一个合理的估算，比如一个鸡蛋估算为50g，一碗饭估算为150g，一杯牛奶估算为250ml）。
-2. 在计算营养参数时，优先匹配内置的常见食物数据库（下面会给出列表）。如果匹配成功，请按照数据库的 100g 比例，乘以上面估算的克数来计算热量及营养成分。
+2. 在计算营养参数时，优先匹配内置的常见食物数据库（下面会给出列表）。如果匹配成功，请按照数据库 of 100g 比例，乘以上面估算的克数来计算热量及营养成分。
 3. 如果在内置食物库中找不到对应的食物，请利用你的营养学常识，给出一个合理公允的估算值，并将 'isEstimated' 标记为 true。
 4. 重要规则：【绝对优先使用用户提供的数据】。如果用户在输入中明确指定了某项食物的任何具体参数（包括：卡路里热量值、克数/毫升分量、碳水化合物克数、蛋白质克数、脂肪克数，例如：“牛肉面，热量 450卡，碳水 45g，蛋白 25g，脂肪 10g”），你提取该食物时【无条件直接使用用户写明的这些准确数值】，绝对不能进行任何重算、覆盖或比例重构！只有在用户没有写明某项参数时，你才可以进行合理推估。使用用户明确指定的数据的项，其 isEstimated 标记为 false。
 5. 日期与体重提取：若用户文本中提到了具体的日期（如“2026年5月30号”或“2026.5.30”）和体重数据（如“体重 78.9 公斤”），请在 JSON 根节点中分别提取为 date（格式必须统一为 YYYY-MM-DD）和 weight（数字，单位kg）。若没提，则 date 返回空字符串 ""，weight 返回 null。
@@ -26,8 +121,14 @@ ${foodDbList}
 
 不要输出任何 markdown 格式的标记，直接返回 JSON 纯文本。`;
 
+  const userPrompt = `用户输入的饮食内容: "${inputText}"`;
+
+  if (config.aiEngine === 'openai') {
+    return callOpenAIAPI(config, systemPrompt, userPrompt);
+  }
+
   const requestBody = {
-    contents: [{ role: "user", parts: [{ text: `用户输入的饮食内容: "${inputText}"` }] }],
+    contents: [{ role: "user", parts: [{ text: userPrompt }] }],
     systemInstruction: { parts: [{ text: systemPrompt }] },
     generationConfig: {
       responseMimeType: "application/json",
@@ -63,13 +164,21 @@ ${foodDbList}
     }
   };
 
-  return callGeminiAPI(apiKey, requestBody);
+  return callGeminiAPI(config.apiKey, requestBody);
 };
 
 // 2. New: Import History from Text API (薄荷健康一键导入)
 export const importHistoryFromText = async (rawText, apiKey) => {
-  if (!apiKey) {
-    throw new Error('请先在设置中配置 Gemini API Key');
+  const config = getAiConfig(apiKey);
+
+  if (config.aiEngine === 'openai') {
+    if (!config.openaiApiKey) {
+      throw new Error('请先在设置中配置自定义 API Key');
+    }
+  } else {
+    if (!config.apiKey) {
+      throw new Error('请先在设置中配置 Gemini API Key');
+    }
   }
 
   const systemPrompt = `你是一个减脂数据迁移助手。用户的输入是他们从别的饮食软件（如薄荷健康）中复制的历史记录文本，或者是口语化的减肥日志。
@@ -83,8 +192,14 @@ export const importHistoryFromText = async (rawText, apiKey) => {
 3. 尽量从乱序文本中把日期对齐。每天的饮食需归类为 breakfast (早餐), lunch (午餐), dinner (晚餐), snack (加餐) 之一。若文本没说明餐段，默认分类为 lunch 或 dinner。
 4. 返回标准的 JSON 格式。`;
 
+  const userPrompt = `历史记录文本内容:\n"${rawText}"`;
+
+  if (config.aiEngine === 'openai') {
+    return callOpenAIAPI(config, systemPrompt, userPrompt);
+  }
+
   const requestBody = {
-    contents: [{ role: "user", parts: [{ text: `历史记录文本内容:\n"${rawText}"` }] }],
+    contents: [{ role: "user", parts: [{ text: userPrompt }] }],
     systemInstruction: { parts: [{ text: systemPrompt }] },
     generationConfig: {
       responseMimeType: "application/json",
@@ -128,13 +243,21 @@ export const importHistoryFromText = async (rawText, apiKey) => {
     }
   };
 
-  return callGeminiAPI(apiKey, requestBody);
+  return callGeminiAPI(config.apiKey, requestBody);
 };
 
 // 3. New: AI Smart Meal Composer API (自动食材搭配)
 export const generateSmartMeal = async (selectedFoods, remainingMacros, cookingMethod, apiKey) => {
-  if (!apiKey) {
-    throw new Error('请先在设置中配置 Gemini API Key');
+  const config = getAiConfig(apiKey);
+
+  if (config.aiEngine === 'openai') {
+    if (!config.openaiApiKey) {
+      throw new Error('请先在设置中配置自定义 API Key');
+    }
+  } else {
+    if (!config.apiKey) {
+      throw new Error('请先在设置中配置 Gemini API Key');
+    }
   }
 
   const foodList = selectedFoods.map(f => 
@@ -163,8 +286,14 @@ ${foodList}
 5. 给出这顿饭的具体“烹饪步骤”和“控油控钠调味建议”。${methodInstruction}调味必须写清楚具体放几克盐、多少毫升低钠酱油、黑胡椒等，强调少油少盐防长水肿。
 6. 返回标准的 JSON 格式。`;
 
+  const userPrompt = `请进行智能配餐并生成烹饪步骤与调味建议。`;
+
+  if (config.aiEngine === 'openai') {
+    return callOpenAIAPI(config, systemPrompt, userPrompt);
+  }
+
   const requestBody = {
-    contents: [{ role: "user", parts: [{ text: `请进行智能配餐并生成烹饪步骤与调味建议。` }] }],
+    contents: [{ role: "user", parts: [{ text: userPrompt }] }],
     systemInstruction: { parts: [{ text: systemPrompt }] },
     generationConfig: {
       responseMimeType: "application/json",
@@ -211,13 +340,21 @@ ${foodList}
     }
   };
 
-  return callGeminiAPI(apiKey, requestBody);
+  return callGeminiAPI(config.apiKey, requestBody);
 };
 
 // 4. New: AI Weekly Report & Diet Diagnosis API (体重与饮食诊断)
 export const getDietDiagnosis = async (weightLogs, dietLogs, targetCalories, targetMacros, apiKey) => {
-  if (!apiKey) {
-    throw new Error('请先在设置中配置 Gemini API Key');
+  const config = getAiConfig(apiKey);
+
+  if (config.aiEngine === 'openai') {
+    if (!config.openaiApiKey) {
+      throw new Error('请先在设置中配置自定义 API Key');
+    }
+  } else {
+    if (!config.apiKey) {
+      throw new Error('请先在设置中配置 Gemini API Key');
+    }
   }
 
   const weightStr = weightLogs.map(w => `${w.date}: ${w.weight}kg`).join('\n');
@@ -251,8 +388,14 @@ ${dietSummaryList.join('\n')}
 4. 给出接下来一到两周的具体改进计划（Action Plan，如“1. 将每日精制碳水更换为燕麦和红薯；2. 增加蛋清的比例补足蛋白缺口”）。
 5. 返回标准的 JSON 格式。`;
 
+  const userPrompt = `请分析我的减脂数据并给出诊断意见。`;
+
+  if (config.aiEngine === 'openai') {
+    return callOpenAIAPI(config, systemPrompt, userPrompt);
+  }
+
   const requestBody = {
-    contents: [{ role: "user", parts: [{ text: `请分析我的减脂数据并给出诊断意见。` }] }],
+    contents: [{ role: "user", parts: [{ text: userPrompt }] }],
     systemInstruction: { parts: [{ text: systemPrompt }] },
     generationConfig: {
       responseMimeType: "application/json",
@@ -274,7 +417,7 @@ ${dietSummaryList.join('\n')}
     }
   };
 
-  return callGeminiAPI(apiKey, requestBody);
+  return callGeminiAPI(config.apiKey, requestBody);
 };
 
 // Common helper to request Gemini API

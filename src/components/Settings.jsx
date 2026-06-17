@@ -20,6 +20,11 @@ const Settings = ({
   const [targetFat, setTargetFat] = useState(String(userProfile.targetFat || 45));
   const [targetCarb, setTargetCarb] = useState(String(userProfile.targetCarb || 140));
 
+  const [aiEngine, setAiEngine] = useState(userProfile.aiEngine || 'gemini');
+  const [openaiBaseUrl, setOpenaiBaseUrl] = useState(userProfile.openaiBaseUrl || '');
+  const [openaiModel, setOpenaiModel] = useState(userProfile.openaiModel || '');
+  const [openaiApiKey, setOpenaiApiKey] = useState(userProfile.openaiApiKey || '');
+
   // BMR Calc state
   const [gender, setGender] = useState('male');
   const [age, setAge] = useState('');
@@ -49,7 +54,11 @@ const Settings = ({
       targetCalories: parseInt(targetCals) || 1500,
       targetProtein: parseInt(targetProt) || 136,
       targetFat: parseInt(targetFat) || 45,
-      targetCarb: parseInt(targetCarb) || 140
+      targetCarb: parseInt(targetCarb) || 140,
+      aiEngine: aiEngine,
+      openaiBaseUrl: openaiBaseUrl.trim(),
+      openaiModel: openaiModel.trim(),
+      openaiApiKey: openaiApiKey.trim()
     });
     alert('设置已成功保存！');
   };
@@ -127,8 +136,9 @@ const Settings = ({
 
   const handleImportHistory = async () => {
     if (!importText.trim()) return;
-    if (!apiKey) {
-      setImportError('使用 AI 解析导入前请先配置并保存 Gemini API Key');
+    const activeKey = aiEngine === 'gemini' ? apiKey : openaiApiKey;
+    if (!activeKey) {
+      setImportError(`使用 AI 解析导入前请先配置并保存 ${aiEngine === 'gemini' ? 'Gemini' : '自定义'} API Key`);
       return;
     }
 
@@ -137,7 +147,7 @@ const Settings = ({
     setImportSuccessMsg('');
 
     try {
-      const parsedData = await importHistoryFromText(importText, apiKey);
+      const parsedData = await importHistoryFromText(importText, activeKey);
       
       if (parsedData.weights.length === 0 && parsedData.dietLogs.length === 0) {
         throw new Error('AI 未能从文本中识别出任何有效的体重或饮食记录，请核对输入。');
@@ -170,15 +180,63 @@ const Settings = ({
         </h4>
 
         <div className="form-group">
-          <label className="form-label">Gemini API Key</label>
-          <input
-            type="password"
-            value={apiKey}
-            onChange={(e) => setApiKey(e.target.value)}
-            placeholder="AI智能解析必须配置此 API Key"
+          <label className="form-label">AI 引擎 (大模型服务商)</label>
+          <select 
+            value={aiEngine} 
+            onChange={(e) => setAiEngine(e.target.value)}
             className="form-input"
-          />
+            style={{ background: 'var(--card-bg)', color: 'var(--text-primary)' }}
+          >
+            <option value="gemini">Google Gemini (官方接口)</option>
+            <option value="openai">自定义 OpenAI 兼容接口 (如国内免费大模型平台，免 VPN)</option>
+          </select>
         </div>
+
+        {aiEngine === 'gemini' ? (
+          <div className="form-group">
+            <label className="form-label">Gemini API Key</label>
+            <input
+              type="password"
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              placeholder="AI 智能解析必须配置此 API Key"
+              className="form-input"
+            />
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', background: 'rgba(255,255,255,0.01)', padding: '12px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.03)', marginBottom: '14px' }}>
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label className="form-label">API 接口地址 (Base URL)</label>
+              <input
+                type="text"
+                value={openaiBaseUrl}
+                onChange={(e) => setOpenaiBaseUrl(e.target.value)}
+                placeholder="例如: https://api.siliconflow.cn/v1 或 https://api.deepseek.com/v1"
+                className="form-input"
+              />
+            </div>
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label className="form-label">大模型名称 (Model Name)</label>
+              <input
+                type="text"
+                value={openaiModel}
+                onChange={(e) => setOpenaiModel(e.target.value)}
+                placeholder="例如: deepseek-ai/DeepSeek-V3 或 deepseek-chat"
+                className="form-input"
+              />
+            </div>
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label className="form-label">自定义 API Key</label>
+              <input
+                type="password"
+                value={openaiApiKey}
+                onChange={(e) => setOpenaiApiKey(e.target.value)}
+                placeholder="在此输入国内平台或代理接口的 API Key"
+                className="form-input"
+              />
+            </div>
+          </div>
+        )}
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
           <div className="form-group">
