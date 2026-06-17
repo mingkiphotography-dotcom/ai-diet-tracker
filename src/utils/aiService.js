@@ -1,5 +1,12 @@
 import { cleanJsonString, safeJsonParse } from './helpers';
 
+// Helper to ensure we always get an array
+const ensureArray = (val) => {
+  if (Array.isArray(val)) return val;
+  if (val && typeof val === 'object') return [val];
+  return [];
+};
+
 // Helper to retrieve full AI configuration from localStorage
 const getAiConfig = (explicitApiKey) => {
   try {
@@ -134,48 +141,66 @@ ${foodDbList}
 
   const userPrompt = `用户输入的饮食内容: "${inputText}"`;
 
-  if (config.aiEngine === 'openai') {
-    return callOpenAIAPI(config, systemPrompt, userPrompt);
-  }
-
-  const requestBody = {
-    contents: [{ role: "user", parts: [{ text: userPrompt }] }],
-    systemInstruction: { parts: [{ text: systemPrompt }] },
-    generationConfig: {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: "OBJECT",
-        properties: {
-          items: {
-            type: "ARRAY",
-            description: "提取出的食物明细列表",
-            items: {
-              type: "OBJECT",
-              properties: {
-                foodName: { type: "STRING", description: "食物中文名称" },
-                amount: { type: "NUMBER", description: "估算重量/容量 (单位: g或ml)" },
-                calories: { type: "NUMBER", description: "该重量下的总热量 (kcal)" },
-                protein: { type: "NUMBER", description: "该重量下的蛋白质含量 (g)" },
-                fat: { type: "NUMBER", description: "该重量下的脂肪含量 (g)" },
-                carb: { type: "NUMBER", description: "该重量下的碳水化合物含量 (g)" },
-                fiber: { type: "NUMBER", description: "该重量下的膳食纤维含量 (g)" },
-                mealType: { type: "STRING", description: "餐段类型：'breakfast', 'lunch', 'dinner', 'snack' 之一" },
-                isEstimated: { type: "BOOLEAN", description: "是否为 AI 凭借经验估算（若匹配内置数据库则为 false）" }
+  const parsed = await (config.aiEngine === 'openai'
+    ? callOpenAIAPI(config, systemPrompt, userPrompt)
+    : callGeminiAPI(config.apiKey, {
+        contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+        systemInstruction: { parts: [{ text: systemPrompt }] },
+        generationConfig: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: "OBJECT",
+            properties: {
+              items: {
+                type: "ARRAY",
+                description: "提取出的食物明细列表",
+                items: {
+                  type: "OBJECT",
+                  properties: {
+                    foodName: { type: "STRING", description: "食物中文名称" },
+                    amount: { type: "NUMBER", description: "估算重量/容量 (单位: g或ml)" },
+                    calories: { type: "NUMBER", description: "该重量下的总热量 (kcal)" },
+                    protein: { type: "NUMBER", description: "该重量下的蛋白质含量 (g)" },
+                    fat: { type: "NUMBER", description: "该重量下的脂肪含量 (g)" },
+                    carb: { type: "NUMBER", description: "该重量下的碳水化合物 (g)" },
+                    fiber: { type: "NUMBER", description: "该重量下的膳食纤维 (g)" },
+                    mealType: { type: "STRING", description: "餐段类型：'breakfast', 'lunch', 'dinner', 'snack' 之一" },
+                    isEstimated: { type: "BOOLEAN", description: "是否为 AI 凭借经验估算（若匹配内置数据库则为 false）" }
+                  },
+                  required: ["foodName", "amount", "calories", "protein", "fat", "carb", "fiber", "mealType", "isEstimated"]
+                }
               },
-              required: ["foodName", "amount", "calories", "protein", "fat", "carb", "fiber", "mealType", "isEstimated"]
-            }
-          },
-          totalCalories: { type: "NUMBER", description: "本次饮食的总热量 (kcal)" },
-          dietSummary: { type: "STRING", description: "简短一句话的膳食结构点评与建议" },
-          date: { type: "STRING", description: "提取出的日期，格式为 YYYY-MM-DD，若无则返回空字符串" },
-          weight: { type: "NUMBER", description: "提取出的体重数值(kg)，若无则返回 null" }
-        },
-        required: ["items", "totalCalories", "dietSummary", "date", "weight"]
-      }
-    }
-  };
+              totalCalories: { type: "NUMBER", description: "本次饮食的总热量 (kcal)" },
+              dietSummary: { type: "STRING", description: "简短一句话的膳食结构点评与建议" },
+              date: { type: "STRING", description: "提取出的日期，格式为 YYYY-MM-DD，若无则返回空字符串" },
+              weight: { type: "NUMBER", description: "提取出的体重数值(kg)，若无则返回 null" }
+            },
+            required: ["items", "totalCalories", "dietSummary", "date", "weight"]
+          }
+        }
+      }));
 
-  return callGeminiAPI(config.apiKey, requestBody);
+  // Fuzzy mapping for queryGeminiForDiet
+  const rawItems = parsed?.items || parsed?.foods || parsed?.foodList || parsed?.food_list || [];
+  const normalizedItems = ensureArray(rawItems).map(item => ({
+    foodName: item.foodName || item.name || item.food || '未知食物',
+    amount: typeof item.amount === 'number' ? item.amount : (typeof item.quantity === 'number' ? item.quantity : (typeof item.weight === 'number' ? item.weight : 100)),
+    calories: typeof item.calories === 'number' ? item.calories : (typeof item.caloriesVal === 'number' ? item.caloriesVal : 0),
+    protein: typeof item.protein === 'number' ? item.protein : (typeof item.proteinVal === 'number' ? item.proteinVal : 0),
+    fat: typeof item.fat === 'number' ? item.fat : (typeof item.fatVal === 'number' ? item.fatVal : 0),
+    carb: typeof item.carb === 'number' ? item.carb : (typeof item.carbohydrate === 'number' ? item.carbohydrate : 0),
+    fiber: typeof item.fiber === 'number' ? item.fiber : 0,
+    mealType: item.mealType || item.meal_type || 'lunch',
+    isEstimated: typeof item.isEstimated === 'boolean' ? item.isEstimated : true
+  }));
+
+  return {
+    items: normalizedItems,
+    totalCalories: typeof parsed?.totalCalories === 'number' ? parsed.totalCalories : (typeof parsed?.total_calories === 'number' ? parsed.total_calories : normalizedItems.reduce((sum, f) => sum + f.calories, 0)),
+    dietSummary: parsed?.dietSummary || parsed?.diet_summary || parsed?.summary || '分析完成',
+    date: parsed?.date || '',
+    weight: typeof parsed?.weight === 'number' ? parsed.weight : null
+  };
 };
 
 // 2. New: Import History from Text API (薄荷健康一键导入)
@@ -205,58 +230,77 @@ export const importHistoryFromText = async (rawText, apiKey) => {
 
   const userPrompt = `历史记录文本内容:\n"${rawText}"`;
 
-    const requestBody = {
-    contents: [{ role: "user", parts: [{ text: userPrompt }] }],
-    systemInstruction: { parts: [{ text: systemPrompt }] },
-    generationConfig: {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: "OBJECT",
-        properties: {
-          weights: {
-            type: "ARRAY",
-            description: "提取出的体重打卡历史记录",
-            items: {
-              type: "OBJECT",
-              properties: {
-                date: { type: "STRING", description: "日期，格式为 YYYY-MM-DD" },
-                weight: { type: "NUMBER", description: "体重数值 (单位: kg)" }
-              },
-              required: ["date", "weight"]
-            }
-          },
-          dietLogs: {
-            type: "ARRAY",
-            description: "提取出的历史饮食日志列表",
-            items: {
-              type: "OBJECT",
-              properties: {
-                date: { type: "STRING", description: "该记录的日期，格式为 YYYY-MM-DD" },
-                name: { type: "STRING", description: "食物中文名" },
-                amount: { type: "NUMBER", description: "食物分量 (g或ml)" },
-                calories: { type: "NUMBER", description: "热量 (kcal)" },
-                protein: { type: "NUMBER", description: "蛋白质 (g)" },
-                fat: { type: "NUMBER", description: "脂肪 (g)" },
-                carb: { type: "NUMBER", description: "碳水化合物 (g)" },
-                fiber: { type: "NUMBER", description: "膳食纤维 (g)" },
-                mealType: { type: "STRING", description: "餐段类型：'breakfast', 'lunch', 'dinner', 'snack'" }
-              },
-              required: ["date", "name", "amount", "calories", "protein", "fat", "carb", "fiber", "mealType"]
-            }
-          }
-        },
-        required: ["weights", "dietLogs"]
-      }
-    }
-  };
-
   const parsed = await (config.aiEngine === 'openai'
     ? callOpenAIAPI(config, systemPrompt, userPrompt)
-    : callGeminiAPI(config.apiKey, requestBody));
+    : callGeminiAPI(config.apiKey, {
+        contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+        systemInstruction: { parts: [{ text: systemPrompt }] },
+        generationConfig: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: "OBJECT",
+            properties: {
+              weights: {
+                type: "ARRAY",
+                description: "提取出的体重打卡历史记录",
+                items: {
+                  type: "OBJECT",
+                  properties: {
+                    date: { type: "STRING", description: "日期，格式为 YYYY-MM-DD" },
+                    weight: { type: "NUMBER", description: "体重数值 (单位: kg)" }
+                  },
+                  required: ["date", "weight"]
+                }
+              },
+              dietLogs: {
+                type: "ARRAY",
+                description: "提取出的历史饮食日志列表",
+                items: {
+                  type: "OBJECT",
+                  properties: {
+                    date: { type: "STRING", description: "该记录的日期，格式为 YYYY-MM-DD" },
+                    name: { type: "STRING", description: "食物中文名" },
+                    amount: { type: "NUMBER", description: "食物分量 (g或ml)" },
+                    calories: { type: "NUMBER", description: "热量 (kcal)" },
+                    protein: { type: "NUMBER", description: "蛋白质 (g)" },
+                    fat: { type: "NUMBER", description: "脂肪 (g)" },
+                    carb: { type: "NUMBER", description: "碳水化合物 (g)" },
+                    fiber: { type: "NUMBER", description: "膳食纤维 (g)" },
+                    mealType: { type: "STRING", description: "餐段类型：'breakfast', 'lunch', 'dinner', 'snack'" }
+                  },
+                  required: ["date", "name", "amount", "calories", "protein", "fat", "carb", "fiber", "mealType"]
+                }
+              }
+            },
+            required: ["weights", "dietLogs"]
+          }
+        }
+      }));
+
+  // Fuzzy mapping for importHistoryFromText
+  const rawWeights = parsed?.weights || parsed?.weight || parsed?.weightLogs || parsed?.weight_logs || parsed?.weightRecords || parsed?.weight_records || [];
+  const rawDietLogs = parsed?.dietLogs || parsed?.dietLog || parsed?.diets || parsed?.diet_logs || parsed?.dietRecords || parsed?.diet_records || [];
+
+  const normalizedWeights = ensureArray(rawWeights).map(item => ({
+    date: item.date || '',
+    weight: typeof item.weight === 'number' ? item.weight : (typeof item.weightVal === 'number' ? item.weightVal : 0)
+  })).filter(item => item.date && item.weight > 0);
+
+  const normalizedDietLogs = ensureArray(rawDietLogs).map(item => ({
+    date: item.date || '',
+    name: item.name || item.foodName || item.food || '未知食物',
+    amount: typeof item.amount === 'number' ? item.amount : (typeof item.quantity === 'number' ? item.quantity : (typeof item.weight === 'number' ? item.weight : 100)),
+    calories: typeof item.calories === 'number' ? item.calories : (typeof item.caloriesVal === 'number' ? item.caloriesVal : 0),
+    protein: typeof item.protein === 'number' ? item.protein : (typeof item.proteinVal === 'number' ? item.proteinVal : 0),
+    fat: typeof item.fat === 'number' ? item.fat : (typeof item.fatVal === 'number' ? item.fatVal : 0),
+    carb: typeof item.carb === 'number' ? item.carb : (typeof item.carbohydrate === 'number' ? item.carbohydrate : 0),
+    fiber: typeof item.fiber === 'number' ? item.fiber : 0,
+    mealType: item.mealType || item.meal_type || 'lunch'
+  })).filter(item => item.date && item.name);
 
   return {
-    weights: Array.isArray(parsed?.weights) ? parsed.weights : [],
-    dietLogs: Array.isArray(parsed?.dietLogs) ? parsed.dietLogs : []
+    weights: normalizedWeights,
+    dietLogs: normalizedDietLogs
   };
 };
 
@@ -302,59 +346,80 @@ ${foodList}
 
   const userPrompt = `请进行智能配餐并生成烹饪步骤与调味建议。`;
 
-  if (config.aiEngine === 'openai') {
-    return callOpenAIAPI(config, systemPrompt, userPrompt);
-  }
-
-  const requestBody = {
-    contents: [{ role: "user", parts: [{ text: userPrompt }] }],
-    systemInstruction: { parts: [{ text: systemPrompt }] },
-    generationConfig: {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: "OBJECT",
-        properties: {
-          recipeName: { type: "STRING", description: "搭配出的减脂餐菜品名称" },
-          ingredients: {
-            type: "ARRAY",
-            description: "计算出的各项食材克数明细",
-            items: {
-              type: "OBJECT",
-              properties: {
-                foodName: { type: "STRING", description: "食物中文名" },
-                amount: { type: "NUMBER", description: "分配的克数 (g或ml)" },
-                calories: { type: "NUMBER", description: "此克数下的热量 (kcal)" },
-                protein: { type: "NUMBER", description: "此克数下的蛋白质 (g)" },
-                fat: { type: "NUMBER", description: "此克数下的脂肪 (g)" },
-                carb: { type: "NUMBER", description: "此克数下的碳水化合物 (g)" },
-                fiber: { type: "NUMBER", description: "此克数下的膳食纤维 (g)" }
-              },
-              required: ["foodName", "amount", "calories", "protein", "fat", "carb", "fiber"]
-            }
-          },
-          totalNutrients: {
+  const parsed = await (config.aiEngine === 'openai'
+    ? callOpenAIAPI(config, systemPrompt, userPrompt)
+    : callGeminiAPI(config.apiKey, {
+        contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+        systemInstruction: { parts: [{ text: systemPrompt }] },
+        generationConfig: {
+          responseMimeType: "application/json",
+          responseSchema: {
             type: "OBJECT",
             properties: {
-              calories: { type: "NUMBER", description: "配餐总热量" },
-              carb: { type: "NUMBER", description: "配餐总碳水" },
-              protein: { type: "NUMBER", description: "配餐总蛋白" },
-              fat: { type: "NUMBER", description: "配餐总脂肪" }
+              recipeName: { type: "STRING", description: "搭配出的减脂餐菜品名称" },
+              ingredients: {
+                type: "ARRAY",
+                description: "计算出的各项食材克数明细",
+                items: {
+                  type: "OBJECT",
+                  properties: {
+                    foodName: { type: "STRING", description: "食物中文名" },
+                    amount: { type: "NUMBER", description: "分配的克数 (g或ml)" },
+                    calories: { type: "NUMBER", description: "此克数下的热量 (kcal)" },
+                    protein: { type: "NUMBER", description: "此克数下的蛋白质 (g)" },
+                    fat: { type: "NUMBER", description: "此克数下的脂肪 (g)" },
+                    carb: { type: "NUMBER", description: "此克数下的碳水化合物 (g)" },
+                    fiber: { type: "NUMBER", description: "此克数下的膳食纤维 (g)" }
+                  },
+                  required: ["foodName", "amount", "calories", "protein", "fat", "carb", "fiber"]
+                }
+              },
+              totalNutrients: {
+                type: "OBJECT",
+                properties: {
+                  calories: { type: "NUMBER", description: "配餐总热量" },
+                  carb: { type: "NUMBER", description: "配餐总碳水" },
+                  protein: { type: "NUMBER", description: "配餐总蛋白" },
+                  fat: { type: "NUMBER", description: "配餐总脂肪" }
+                },
+                required: ["calories", "carb", "protein", "fat"]
+              },
+              cookingSteps: {
+                type: "ARRAY",
+                description: "具体的无油/低油少烟烹饪步骤",
+                items: { type: "STRING" }
+              },
+              seasoningTips: { type: "STRING", description: "精准的低钠低油调味指南" }
             },
-            required: ["calories", "carb", "protein", "fat"]
-          },
-          cookingSteps: {
-            type: "ARRAY",
-            description: "具体的无油/低油少烟烹饪步骤",
-            items: { type: "STRING" }
-          },
-          seasoningTips: { type: "STRING", description: "精准的低钠低油调味指南" }
-        },
-        required: ["recipeName", "ingredients", "totalNutrients", "cookingSteps", "seasoningTips"]
-      }
-    }
-  };
+            required: ["recipeName", "ingredients", "totalNutrients", "cookingSteps", "seasoningTips"]
+          }
+        }
+      }));
 
-  return callGeminiAPI(config.apiKey, requestBody);
+  // Fuzzy mapping for generateSmartMeal
+  const rawIngredients = parsed?.ingredients || parsed?.foods || parsed?.items || [];
+  const normalizedIngredients = ensureArray(rawIngredients).map(item => ({
+    foodName: item.foodName || item.name || item.food || '未知食物',
+    amount: typeof item.amount === 'number' ? item.amount : (typeof item.quantity === 'number' ? item.quantity : (typeof item.weight === 'number' ? item.weight : 100)),
+    calories: typeof item.calories === 'number' ? item.calories : 0,
+    protein: typeof item.protein === 'number' ? item.protein : 0,
+    fat: typeof item.fat === 'number' ? item.fat : 0,
+    carb: typeof item.carb === 'number' ? item.carb : (typeof item.carbohydrate === 'number' ? item.carbohydrate : 0),
+    fiber: typeof item.fiber === 'number' ? item.fiber : 0
+  }));
+
+  const recipeName = parsed?.recipeName || parsed?.recipe_name || parsed?.name || 'AI智能推荐减脂餐';
+  const totalNutrients = parsed?.totalNutrients || parsed?.total_nutrients || { calories: 0, carb: 0, protein: 0, fat: 0 };
+  const cookingSteps = parsed?.cookingSteps || parsed?.cooking_steps || parsed?.steps || [];
+  const seasoningTips = parsed?.seasoningTips || parsed?.seasoning_tips || parsed?.tips || '';
+
+  return {
+    recipeName,
+    ingredients: normalizedIngredients,
+    totalNutrients,
+    cookingSteps: ensureArray(cookingSteps),
+    seasoningTips
+  };
 };
 
 // 4. New: AI Weekly Report & Diet Diagnosis API (体重与饮食诊断)
@@ -404,34 +469,44 @@ ${dietSummaryList.join('\n')}
 
   const userPrompt = `请分析我的减脂数据并给出诊断意见。`;
 
-  if (config.aiEngine === 'openai') {
-    return callOpenAIAPI(config, systemPrompt, userPrompt);
-  }
-
-  const requestBody = {
-    contents: [{ role: "user", parts: [{ text: userPrompt }] }],
-    systemInstruction: { parts: [{ text: systemPrompt }] },
-    generationConfig: {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: "OBJECT",
-        properties: {
-          weightTrend: { type: "STRING", description: "体重趋势，如'稳定下降'、'平台期波动'等" },
-          weightChangeKg: { type: "NUMBER", description: "最近这段时间累计减重公斤数 (kg，下降为正数，上升为负数)" },
-          macroAnalysis: { type: "STRING", description: "三大营养素比例分析" },
-          diagnosisReport: { type: "STRING", description: "详细多段落的诊断分析报告" },
-          actionPlan: {
-            type: "ARRAY",
-            description: "接下来具体的改进步骤",
-            items: { type: "STRING" }
+  const parsed = await (config.aiEngine === 'openai'
+    ? callOpenAIAPI(config, systemPrompt, userPrompt)
+    : callGeminiAPI(config.apiKey, {
+        contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+        systemInstruction: { parts: [{ text: systemPrompt }] },
+        generationConfig: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: "OBJECT",
+            properties: {
+              weightTrend: { type: "STRING", description: "体重趋势，如'稳定下降'、'平台期波动'等" },
+              weightChangeKg: { type: "NUMBER", description: "最近这段时间累计减重公斤数 (kg，下降为正数，上升为负数)" },
+              macroAnalysis: { type: "STRING", description: "三大营养素比例分析" },
+              diagnosisReport: { type: "STRING", description: "详细多段落的诊断分析报告" },
+              actionPlan: {
+                type: "ARRAY",
+                description: "接下来具体的改进步骤",
+                items: { type: "STRING" }
+              }
+            },
+            required: ["weightTrend", "weightChangeKg", "macroAnalysis", "diagnosisReport", "actionPlan"]
           }
-        },
-        required: ["weightTrend", "weightChangeKg", "macroAnalysis", "diagnosisReport", "actionPlan"]
-      }
-    }
-  };
+        }
+      }));
 
-  return callGeminiAPI(config.apiKey, requestBody);
+  const weightTrend = parsed?.weightTrend || parsed?.weight_trend || '未知走势';
+  const weightChangeKg = typeof parsed?.weightChangeKg === 'number' ? parsed.weightChangeKg : (typeof parsed?.weight_change_kg === 'number' ? parsed.weight_change_kg : 0);
+  const macroAnalysis = parsed?.macroAnalysis || parsed?.macro_analysis || '分析完成';
+  const diagnosisReport = parsed?.diagnosisReport || parsed?.diagnosis_report || parsed?.report || '诊断完成';
+  const actionPlan = parsed?.actionPlan || parsed?.action_plan || parsed?.plan || [];
+
+  return {
+    weightTrend,
+    weightChangeKg,
+    macroAnalysis,
+    diagnosisReport,
+    actionPlan: ensureArray(actionPlan)
+  };
 };
 
 // Common helper to request Gemini API
@@ -466,7 +541,7 @@ const callGeminiAPI = async (apiKey, requestBody) => {
     const cleanedText = cleanJsonString(textContent);
     const parsedData = safeJsonParse(cleanedText, null);
     if (!parsedData) {
-      throw new Error('解析 AI 响应的 JSON 数据失败');
+      throw new Error('解析 AI 响应 of JSON 数据失败');
     }
 
     return parsedData;
