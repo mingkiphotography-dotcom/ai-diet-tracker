@@ -418,7 +418,7 @@ html {
   -webkit-backdrop-filter: blur(20px);
   border-top: 1px solid var(--nav-border);
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   padding-bottom: var(--safe-area-bottom);
   z-index: 100;
   box-shadow: var(--nav-shadow);
