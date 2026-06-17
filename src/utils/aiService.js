@@ -16,8 +16,10 @@ export const queryGeminiForDiet = async (inputText, apiKey, foodDatabase) => {
 1. 分析用户吃的内容和估算的量（如果用户没说分量，你根据常识给出一个合理的估算，比如一个鸡蛋估算为50g，一碗饭估算为150g，一杯牛奶估算为250ml）。
 2. 在计算营养参数时，优先匹配内置的常见食物数据库（下面会给出列表）。如果匹配成功，请按照数据库的 100g 比例，乘以上面估算的克数来计算热量及营养成分。
 3. 如果在内置食物库中找不到对应的食物，请利用你的营养学常识，给出一个合理公允的估算值，并将 'isEstimated' 标记为 true。
-4. 重要规则：【绝对优先使用用户提供的数据】。如果用户在输入中明确指定了某项食物的任何具体参数（包括：卡路里热量值、克数/毫升分量、碳水化合物克数、蛋白质克数、脂肪克数，例如：“牛肉面，热量 450卡，碳水 45g，蛋白 25g，脂肪 10g”），你提取该食物时【必须直接使用用户写明的这些准确数值】，绝对不能进行任何重算、覆盖或比例重构！只有在用户没有写明某项参数时，你才可以进行合理推估。使用用户明确指定的数据的项，其 isEstimated 标记为 false。
-5. 返回的结果必须是一个标准的 JSON 对象，且符合指定的 JSON Schema 格式。
+4. 重要规则：【绝对优先使用用户提供的数据】。如果用户在输入中明确指定了某项食物的任何具体参数（包括：卡路里热量值、克数/毫升分量、碳水化合物克数、蛋白质克数、脂肪克数，例如：“牛肉面，热量 450卡，碳水 45g，蛋白 25g，脂肪 10g”），你提取该食物时【无条件直接使用用户写明的这些准确数值】，绝对不能进行任何重算、覆盖或比例重构！只有在用户没有写明某项参数时，你才可以进行合理推估。使用用户明确指定的数据的项，其 isEstimated 标记为 false。
+5. 日期与体重提取：若用户文本中提到了具体的日期（如“2026年5月30号”或“2026.5.30”）和体重数据（如“体重 78.9 公斤”），请在 JSON 根节点中分别提取为 date（格式必须统一为 YYYY-MM-DD）和 weight（数字，单位kg）。若没提，则 date 返回空字符串 ""，weight 返回 null。
+6. 餐段提取：若用户在输入中显式区分了“早上/早餐/1.”、“中午/午餐/2.”、“晚上/晚餐/3.”或“加餐/4.”，请提取每个食物项对应的 mealType，值必须为 'breakfast'、'lunch'、'dinner'、'snack' 之一。若没提，则默认设为 'lunch'。
+7. 返回的结果必须是一个标准的 JSON 对象，且符合指定的 JSON Schema 格式。
 
 内置食物数据库列表：
 ${foodDbList}
@@ -45,15 +47,18 @@ ${foodDbList}
                 fat: { type: "NUMBER", description: "该重量下的脂肪含量 (g)" },
                 carb: { type: "NUMBER", description: "该重量下的碳水化合物含量 (g)" },
                 fiber: { type: "NUMBER", description: "该重量下的膳食纤维含量 (g)" },
+                mealType: { type: "STRING", description: "餐段类型：'breakfast', 'lunch', 'dinner', 'snack' 之一" },
                 isEstimated: { type: "BOOLEAN", description: "是否为 AI 凭借经验估算（若匹配内置数据库则为 false）" }
               },
-              required: ["foodName", "amount", "calories", "protein", "fat", "carb", "fiber", "isEstimated"]
+              required: ["foodName", "amount", "calories", "protein", "fat", "carb", "fiber", "mealType", "isEstimated"]
             }
           },
           totalCalories: { type: "NUMBER", description: "本次饮食的总热量 (kcal)" },
-          dietSummary: { type: "STRING", description: "简短一句话的膳食结构点评与建议" }
+          dietSummary: { type: "STRING", description: "简短一句话的膳食结构点评与建议" },
+          date: { type: "STRING", description: "提取出的日期，格式为 YYYY-MM-DD，若无则返回空字符串" },
+          weight: { type: "NUMBER", description: "提取出的体重数值(kg)，若无则返回 null" }
         },
-        required: ["items", "totalCalories", "dietSummary"]
+        required: ["items", "totalCalories", "dietSummary", "date", "weight"]
       }
     }
   };

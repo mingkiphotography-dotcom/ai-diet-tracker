@@ -85,6 +85,7 @@ function App() {
 
   // Today's context
   const todayStr = getTodayDateString();
+  const [selectedDate, setSelectedDate] = useState(todayStr);
   const todayLogs = dietLogs[todayStr] || [];
   const todayPhotos = mealPhotos[todayStr] || {};
 
@@ -264,10 +265,15 @@ function App() {
     onSuccess(result);
   };
 
-  const handleAiModalConfirm = (loggedItems) => {
+  const handleAiModalConfirm = (loggedItems, parsedDate, parsedWeight) => {
+    const targetDate = parsedDate || aiLogTargetDate || todayStr;
     loggedItems.forEach(item => {
-      handleLogFood(item, aiLogTargetDate);
+      handleLogFood(item, targetDate);
     });
+    if (parsedWeight) {
+      handleSaveWeight(targetDate, parsedWeight);
+    }
+    setSelectedDate(targetDate);
     setActiveTab('diary');
   };
 
@@ -392,6 +398,8 @@ function App() {
               setAiLogTargetDate(date);
               setIsAiModalOpen(true);
             }}
+            selectedDate={selectedDate}
+            setSelectedDate={setSelectedDate}
           />
         )}
 

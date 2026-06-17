@@ -3,7 +3,6 @@ import { Trash2, Check, X, Flame } from 'lucide-react';
 
 const AiLogModal = ({ isOpen, onClose, aiData, onConfirm }) => {
   const [items, setItems] = useState([]);
-  const [mealType, setMealType] = useState('breakfast');
 
   // Load items from AI data when opened
   useEffect(() => {
@@ -28,17 +27,11 @@ const AiLogModal = ({ isOpen, onClose, aiData, onConfirm }) => {
           fat: item.fat,
           carb: item.carb,
           fiber: item.fiber,
+          mealType: item.mealType || 'lunch', // Default to AI parsed mealType
           isEstimated: item.isEstimated
         };
       });
       setItems(itemsWithPerGram);
-
-      // Smart guess mealType based on local time
-      const hour = new Date().getHours();
-      if (hour < 10) setMealType('breakfast');
-      else if (hour < 14) setMealType('lunch');
-      else if (hour < 19) setMealType('dinner');
-      else setMealType('snack');
     }
   }, [aiData]);
 
@@ -62,6 +55,19 @@ const AiLogModal = ({ isOpen, onClose, aiData, onConfirm }) => {
     }));
   };
 
+  const handleItemMealTypeChange = (id, newMealType) => {
+    setItems(prev => prev.map(item => {
+      if (item.id === id) {
+        return { ...item, mealType: newMealType };
+      }
+      return item;
+    }));
+  };
+
+  const handleBulkMealTypeChange = (newMealType) => {
+    setItems(prev => prev.map(item => ({ ...item, mealType: newMealType })));
+  };
+
   const handleDeleteItem = (id) => {
     setItems(prev => prev.filter(item => item.id !== id));
   };
@@ -76,9 +82,10 @@ const AiLogModal = ({ isOpen, onClose, aiData, onConfirm }) => {
       fat: item.fat,
       carb: item.carb,
       fiber: item.fiber,
-      mealType: mealType
+      mealType: item.mealType
     }));
-    onConfirm(finalItems);
+    // Pass finalItems, parsed date and weight back
+    onConfirm(finalItems, aiData.date, aiData.weight);
     onClose();
   };
 
@@ -94,13 +101,36 @@ const AiLogModal = ({ isOpen, onClose, aiData, onConfirm }) => {
           <button className="close-btn" onClick={onClose}><X size={18} /></button>
         </div>
 
-        <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '16px', fontStyle: 'italic' }}>
+        <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '12px', fontStyle: 'italic' }}>
           “{aiData.dietSummary || '分析完毕，请核对食物信息并保存记录'}”
         </p>
 
-        {/* Meal Type Selection */}
-        <div className="form-group">
-          <label className="form-label">记录到哪个餐段？</label>
+        {/* Date & Weight parsed banner */}
+        {(aiData.date || aiData.weight) && (
+          <div style={{ 
+            display: 'flex', 
+            flexWrap: 'wrap',
+            gap: '12px', 
+            marginBottom: '16px', 
+            background: 'rgba(16,185,129,0.06)', 
+            padding: '10px 14px', 
+            borderRadius: '10px', 
+            fontSize: '12px', 
+            color: 'var(--text-primary)', 
+            border: '1px solid rgba(16,185,129,0.12)' 
+          }}>
+            {aiData.date && (
+              <div>📅 识别日期: <strong style={{ color: 'var(--color-primary)' }}>{aiData.date}</strong></div>
+            )}
+            {aiData.weight && (
+              <div>⚖️ 识别体重: <strong style={{ color: 'var(--color-primary)' }}>{aiData.weight} kg</strong></div>
+            )}
+          </div>
+        )}
+
+        {/* Bulk Meal Type Selection */}
+        <div className="form-group" style={{ marginBottom: '14px' }}>
+          <label className="form-label">批量修改全部餐段为：</label>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
             {[
               { val: 'breakfast', label: '早餐' },
@@ -113,13 +143,11 @@ const AiLogModal = ({ isOpen, onClose, aiData, onConfirm }) => {
                 type="button"
                 className="btn-secondary"
                 style={{
-                  padding: '8px',
-                  fontSize: '12px',
-                  background: mealType === m.val ? 'var(--color-primary)' : 'rgba(255,255,255,0.03)',
-                  borderColor: mealType === m.val ? 'var(--color-primary)' : 'rgba(255,255,255,0.08)',
-                  color: mealType === m.val ? 'white' : 'var(--text-primary)'
+                  padding: '6px 4px',
+                  fontSize: '11px',
+                  margin: 0
                 }}
-                onClick={() => setMealType(m.val)}
+                onClick={() => handleBulkMealTypeChange(m.val)}
               >
                 {m.label}
               </button>
@@ -128,7 +156,7 @@ const AiLogModal = ({ isOpen, onClose, aiData, onConfirm }) => {
         </div>
 
         {/* Preview List */}
-        <div className="ai-preview-list">
+        <div className="ai-preview-list" style={{ maxHeight: '45vh', overflowY: 'auto' }}>
           {items.map(item => (
             <div key={item.id} className="ai-preview-card">
               <div className="ai-preview-header">
@@ -141,22 +169,49 @@ const AiLogModal = ({ isOpen, onClose, aiData, onConfirm }) => {
                 </button>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '8px' }}>
-                <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '12px', marginTop: '8px' }}>
+                {/* Amount */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>分量:</span>
                   <input
                     type="number"
                     value={item.amount || ''}
                     className="form-input"
-                    style={{ padding: '4px 8px', width: '70px', height: '28px', textAlign: 'center' }}
+                    style={{ padding: '4px 8px', width: '60px', height: '26px', textAlign: 'center', margin: 0 }}
                     onChange={(e) => handleAmountChange(item.id, e.target.value)}
                   />
                   <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>g/ml</span>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '2px', color: 'var(--color-calories)' }}>
+
+                {/* Individual Meal Type Selector */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>餐段:</span>
+                  <select 
+                    value={item.mealType} 
+                    onChange={(e) => handleItemMealTypeChange(item.id, e.target.value)}
+                    style={{ 
+                      padding: '2px 4px', 
+                      border: '1px solid var(--border-color)', 
+                      borderRadius: '6px', 
+                      background: 'var(--card-bg)', 
+                      color: 'var(--text-primary)', 
+                      fontSize: '11px',
+                      outline: 'none',
+                      height: '26px'
+                    }}
+                  >
+                    <option value="breakfast">早餐</option>
+                    <option value="lunch">午餐</option>
+                    <option value="dinner">晚餐</option>
+                    <option value="snack">加餐</option>
+                  </select>
+                </div>
+
+                {/* Calorie display */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '2px', color: 'var(--color-calories)', marginLeft: 'auto' }}>
                   <Flame size={14} />
-                  <span style={{ fontFamily: 'var(--font-title)', fontWeight: '700', fontSize: '14px' }}>
-                    {item.calories} <span style={{ fontSize: '10px', fontWeight: '400' }}>kcal</span>
+                  <span style={{ fontFamily: 'var(--font-title)', fontWeight: '700', fontSize: '13px' }}>
+                    {item.calories} <span style={{ fontSize: '9px', fontWeight: '400' }}>kcal</span>
                   </span>
                 </div>
               </div>
@@ -179,7 +234,7 @@ const AiLogModal = ({ isOpen, onClose, aiData, onConfirm }) => {
         </div>
 
         {/* Total stats & buttons */}
-        <div style={{ marginTop: '20px', padding: '16px 0', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+        <div style={{ marginTop: '20px', padding: '16px 0 0', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
             <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>本次AI提取总热量</span>
             <span style={{ fontFamily: 'var(--font-title)', fontSize: '20px', fontWeight: '800', color: 'var(--color-calories)' }}>
@@ -188,12 +243,12 @@ const AiLogModal = ({ isOpen, onClose, aiData, onConfirm }) => {
           </div>
 
           <div style={{ display: 'flex', gap: '12px' }}>
-            <button className="btn-secondary" style={{ flex: 1 }} onClick={onClose}>
+            <button className="btn-secondary" style={{ flex: 1, margin: 0 }} onClick={onClose}>
               取消
             </button>
             <button 
               className="btn-primary" 
-              style={{ flex: 1 }} 
+              style={{ flex: 1, margin: 0 }} 
               onClick={handleSave}
               disabled={items.length === 0}
             >

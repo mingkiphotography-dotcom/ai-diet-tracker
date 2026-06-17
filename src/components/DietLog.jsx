@@ -21,10 +21,11 @@ const DietLog = ({
   onSaveSleep,
   onDeleteSleep,
   onQueryAi,
-  onAiSuccess
+  onAiSuccess,
+  selectedDate,
+  setSelectedDate
 }) => {
   const todayStr = getTodayDateString();
-  const [selectedDate, setSelectedDate] = useState(todayStr);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [selectedMealSlot, setSelectedMealSlot] = useState('breakfast');
   
