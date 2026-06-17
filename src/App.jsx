@@ -32,7 +32,7 @@ function App() {
   
   // 1. Local Storage Hydration
   const [apiKey, setApiKey] = useState(() => {
-    return safeStorage.getItem('ai_diet_api_key') || 'AIzaSyBDBZyLnsqDIIUaM6I3NV-cHvKHnWXyaw4';
+    return safeStorage.getItem('ai_diet_api_key') || '';
   });
 
   const [userProfile, setUserProfile] = useState(() => {
