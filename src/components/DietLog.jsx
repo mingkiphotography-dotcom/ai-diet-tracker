@@ -347,14 +347,19 @@ const DietLog = ({
               const cells = [];
               // Add empty cells
               for (let j = 0; j < startOffset; j++) {
-                cells.push(<div key={`empty-${j}`} style={{ height: '36px' }} />);
+                cells.push(<div key={`empty-${j}`} style={{ height: '44px' }} />);
               }
               // Add day cells
               for (let day = 1; day <= daysInMonth; day++) {
                 const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
                 
-                // Check if recorded
-                const hasDiet = dietLogs[dateStr] && dietLogs[dateStr].length > 0;
+                // Calculate macros for this specific day
+                const dayLogs = dietLogs[dateStr] || [];
+                const dayCarb = dayLogs.reduce((sum, item) => sum + (item.carb || 0), 0);
+                const dayProtein = dayLogs.reduce((sum, item) => sum + (item.protein || 0), 0);
+                const dayFat = dayLogs.reduce((sum, item) => sum + (item.fat || 0), 0);
+                
+                const hasDiet = dayLogs.length > 0;
                 const hasWeight = weightLogs.some(w => w.date === dateStr);
                 const hasBurned = burnedLogs[dateStr] !== undefined;
                 const hasSleep = sleepLogs[dateStr] !== undefined;
@@ -372,13 +377,12 @@ const DietLog = ({
                       setShowCalendar(false);
                     }}
                     style={{
-                      background: isSelected ? 'var(--color-primary)' : 'rgba(255,255,255,0.02)',
-                      border: isToday ? '1px solid var(--color-primary)' : '1px solid rgba(255,255,255,0.04)',
+                      background: 'rgba(255,255,255,0.01)',
+                      border: isToday ? '1px solid var(--color-primary)' : '1px solid rgba(255,255,255,0.03)',
                       borderRadius: '8px',
                       padding: 0,
-                      height: '36px',
+                      height: '44px',
                       display: 'flex',
-                      flexDirection: 'column',
                       alignItems: 'center',
                       justifyContent: 'center',
                       cursor: 'pointer',
@@ -388,21 +392,89 @@ const DietLog = ({
                       outline: 'none'
                     }}
                   >
-                    <span style={{ 
-                      fontSize: '11px', 
-                      fontWeight: isSelected || isToday ? 'bold' : 'normal',
-                      color: isSelected ? '#fff' : (isToday ? 'var(--color-primary)' : 'var(--text-primary)')
+                    {/* Concentric rings behind day number if there is diet data */}
+                    {hasDiet && (
+                      <svg width="40" height="40" viewBox="0 0 40 40" style={{ position: 'absolute', top: '2px', left: '50%', transform: 'translateX(-50%)', pointerEvents: 'none' }}>
+                        {/* Outer Ring Background (Carbs) */}
+                        <circle cx="20" cy="20" r="16" stroke="#38bdf8" strokeWidth="2.5" fill="none" opacity="0.08" />
+                        {/* Middle Ring Background (Protein) */}
+                        <circle cx="20" cy="20" r="12" stroke="#a855f7" strokeWidth="2.5" fill="none" opacity="0.08" />
+                        {/* Inner Ring Background (Fat) */}
+                        <circle cx="20" cy="20" r="8" stroke="#fb923c" strokeWidth="2.5" fill="none" opacity="0.08" />
+                        
+                        {/* Outer Ring Active (Carbs) */}
+                        <circle 
+                          cx="20" 
+                          cy="20" 
+                          r="16" 
+                          stroke="#38bdf8" 
+                          strokeWidth="2.5" 
+                          fill="none" 
+                          strokeLinecap="round" 
+                          strokeDasharray="100.5" 
+                          strokeDashoffset={100.5 - (Math.min(1, dayCarb / (targetCarb || 1)) * 100.5)} 
+                          transform="rotate(-90 20 20)" 
+                        />
+                        {/* Middle Ring Active (Protein) */}
+                        <circle 
+                          cx="20" 
+                          cy="20" 
+                          r="12" 
+                          stroke="#a855f7" 
+                          strokeWidth="2.5" 
+                          fill="none" 
+                          strokeLinecap="round" 
+                          strokeDasharray="75.4" 
+                          strokeDashoffset={75.4 - (Math.min(1, dayProtein / (targetProtein || 1)) * 75.4)} 
+                          transform="rotate(-90 20 20)" 
+                        />
+                        {/* Inner Ring Active (Fat) */}
+                        <circle 
+                          cx="20" 
+                          cy="20" 
+                          r="8" 
+                          stroke="#fb923c" 
+                          strokeWidth="2.5" 
+                          fill="none" 
+                          strokeLinecap="round" 
+                          strokeDasharray="50.3" 
+                          strokeDashoffset={50.3 - (Math.min(1, dayFat / (targetFat || 1)) * 50.3)} 
+                          transform="rotate(-90 20 20)" 
+                        />
+                      </svg>
+                    )}
+
+                    {/* Day number container */}
+                    <div style={{
+                      width: '14px',
+                      height: '14px',
+                      borderRadius: '50%',
+                      background: isSelected ? 'var(--color-primary)' : 'transparent',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      zIndex: 1,
+                      position: 'relative'
                     }}>
-                      {day}
-                    </span>
-                    {isRecorded && (
+                      <span style={{ 
+                        fontSize: '10px', 
+                        fontWeight: isSelected || isToday ? 'bold' : 'normal',
+                        color: isSelected ? '#fff' : (isToday ? 'var(--color-primary)' : 'var(--text-primary)')
+                      }}>
+                        {day}
+                      </span>
+                    </div>
+
+                    {/* Small dot below for weight/sleep logs if NO diet log (since rings represent diet) */}
+                    {!hasDiet && isRecorded && (
                       <span style={{ 
                         position: 'absolute', 
-                        bottom: '3px', 
+                        bottom: '4px', 
                         width: '4px', 
                         height: '4px', 
                         borderRadius: '50%', 
-                        background: isSelected ? '#fff' : 'var(--color-primary)' 
+                        background: isSelected ? '#fff' : 'var(--color-primary)',
+                        zIndex: 1
                       }} />
                     )}
                   </button>
