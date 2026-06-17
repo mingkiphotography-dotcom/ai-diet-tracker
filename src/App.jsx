@@ -366,7 +366,7 @@ function App() {
         </div>
         <div className="header-badge">
           <Sparkles size={12} />
-          <span>v1.3.2</span>
+          <span>v1.3.3</span>
         </div>
       </header>
 
@@ -398,8 +398,9 @@ function App() {
               setAiLogTargetDate(date);
               setIsAiModalOpen(true);
             }}
-            selectedDate={selectedDate}
+                        selectedDate={selectedDate}
             setSelectedDate={setSelectedDate}
+            onImportHistoryData={handleImportHistoryData}
           />
         )}
 

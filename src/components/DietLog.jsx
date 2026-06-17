@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Search, X, Camera, Eye, ChevronLeft, ChevronRight, Sparkles, Wand2, Loader2, AlertCircle } from 'lucide-react';
+import { Plus, Trash2, Search, X, Camera, Eye, ChevronLeft, ChevronRight, Sparkles, Wand2, Loader2, AlertCircle, Import, Check } from 'lucide-react';
 import { calculateNutrients, compressImage, getTodayDateString } from '../utils/helpers';
+import { importHistoryFromText } from '../utils/aiService';
 
 const DietLog = ({ 
   dietLogs, 
@@ -20,10 +21,11 @@ const DietLog = ({
   onDeleteBurned,
   onSaveSleep,
   onDeleteSleep,
-  onQueryAi,
+    onQueryAi,
   onAiSuccess,
   selectedDate,
-  setSelectedDate
+  setSelectedDate,
+  onImportHistoryData
 }) => {
   const todayStr = getTodayDateString();
   const [showCalendar, setShowCalendar] = useState(false);
@@ -63,10 +65,17 @@ const DietLog = ({
   const [localSleepHours, setLocalSleepHours] = useState('');
   const [localSleepMinutes, setLocalSleepMinutes] = useState('');
 
-  // AI Flash Log state
+    // AI Flash Log state
   const [inputText, setInputText] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
   const [aiErrorMsg, setAiErrorMsg] = useState('');
+
+  // AI History Import state
+  const [aiMode, setAiMode] = useState('single'); // 'single' or 'history'
+  const [importText, setImportText] = useState('');
+  const [importLoading, setImportLoading] = useState(false);
+  const [importError, setImportError] = useState('');
+  const [importSuccessMsg, setImportSuccessMsg] = useState('');
 
   const handleAiSubmit = async (e) => {
     e.preventDefault();
@@ -82,6 +91,35 @@ const DietLog = ({
       setAiErrorMsg(err.message || 'AI 智能解析失败，请检查网络或配置');
     } finally {
       setAiLoading(false);
+    }
+  };
+
+  const handleHistoryImportSubmit = async () => {
+    if (!importText.trim()) return;
+    const activeKey = userProfile.aiEngine === 'gemini' ? userProfile.apiKey : userProfile.openaiApiKey;
+    if (!activeKey) {
+      setImportError(`使用 AI 解析导入前请先在「设置」中配置并保存 ${userProfile.aiEngine === 'gemini' ? 'Gemini' : '自定义'} API Key`);
+      return;
+    }
+
+    setImportLoading(true);
+    setImportError('');
+    setImportSuccessMsg('');
+
+    try {
+      const parsedData = await importHistoryFromText(importText, activeKey);
+      
+      if (parsedData.weights.length === 0 && parsedData.dietLogs.length === 0) {
+        throw new Error('AI 未能从文本中识别出任何有效的体重或饮食记录，请核对输入。');
+      }
+
+      onImportHistoryData(parsedData);
+      setImportSuccessMsg(`成功导入 ${parsedData.weights.length} 条体重记录和 ${parsedData.dietLogs.length} 条饮食日志！`);
+      setImportText('');
+    } catch (err) {
+      setImportError(err.message || 'AI 解析导入失败，请稍后重试');
+    } finally {
+      setImportLoading(false);
     }
   };
 
@@ -799,45 +837,115 @@ const DietLog = ({
         </div>
       </div>
 
-      {/* AI Magic Box for the selected date */}
+            {/* AI Magic Box for the selected date */}
       <div className="glass-card ai-magic-box" style={{ padding: '16px 18px', marginBottom: '16px' }}>
-        <div className="ai-magic-title" style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 'bold' }}>
-          <Sparkles size={18} style={{ color: '#c084fc' }} />
-          <span style={{ color: 'var(--text-primary)' }}>AI 闪电智能记账 ({selectedDate === todayStr ? '今天' : selectedDate})</span>
-        </div>
-        <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
-          支持口语化输入，AI 自动拆分克数和卡路里，并将记录写入当前选中的日期。
-        </p>
-
-        <form onSubmit={handleAiSubmit} className="ai-input-wrapper" style={{ marginTop: '12px' }}>
-          <textarea
-            value={inputText}
-            onChange={(e) => setInputText(e.target.value)}
-            placeholder={`输入当前日期所吃的食物，例如：\n“早上吃了两个煮鸡蛋，午餐吃了150克生鸡胸肉加一盘西蓝花”`}
-            className="ai-textarea"
-            disabled={aiLoading}
-          />
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
+          <div className="ai-magic-title" style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 'bold' }}>
+            <Sparkles size={18} style={{ color: '#c084fc' }} />
+            <span style={{ color: 'var(--text-primary)', fontSize: '14px' }}>
+              {aiMode === 'single' ? `AI 闪电智能记账 (${selectedDate === todayStr ? '今天' : selectedDate})` : 'AI 历史数据导入'}
+            </span>
+          </div>
           <button 
-            type="submit" 
-            className="ai-submit-btn" 
-            disabled={aiLoading || !inputText.trim()}
+            type="button" 
+            onClick={() => {
+              setAiMode(aiMode === 'single' ? 'history' : 'single');
+              setImportError('');
+              setImportSuccessMsg('');
+            }}
+            style={{ fontSize: '11px', color: 'var(--color-primary)', background: 'rgba(16, 185, 129, 0.06)', border: '1px solid rgba(16, 185, 129, 0.15)', borderRadius: '12px', cursor: 'pointer', padding: '4px 8px', fontWeight: 'bold' }}
           >
-            {aiLoading ? <Loader2 size={16} className="spin" /> : <Wand2 size={16} />}
+            {aiMode === 'single' ? '切换为历史文本导入 ➜' : '➜ 返回单日智能记账'}
           </button>
-        </form>
+        </div>
 
-        {aiLoading && (
-          <div className="ai-loading-state" style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: 'var(--color-primary)', marginTop: '8px' }}>
-            <Loader2 size={14} className="spin" />
-            <span>AI 正在匹配食物库并计算热量...</span>
-          </div>
-        )}
+        {aiMode === 'single' ? (
+          <>
+            <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
+              支持口语化输入，AI 自动拆分克数和卡路里，并将记录写入当前选中的日期。
+            </p>
 
-        {aiErrorMsg && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#ef4444', fontSize: '11px', marginTop: '10px', background: 'rgba(239, 68, 68, 0.06)', padding: '8px 12px', borderRadius: '8px' }}>
-            <AlertCircle size={14} />
-            <span>{aiErrorMsg}</span>
-          </div>
+            <form onSubmit={handleAiSubmit} className="ai-input-wrapper" style={{ marginTop: '12px' }}>
+              <textarea
+                value={inputText}
+                onChange={(e) => setInputText(e.target.value)}
+                placeholder={`输入当前日期所吃的食物，例如：\n“早上吃了两个煮鸡蛋，午餐吃了150克生鸡胸肉加一盘西蓝花”`}
+                className="ai-textarea"
+                disabled={aiLoading}
+              />
+              <button 
+                type="submit" 
+                className="ai-submit-btn" 
+                disabled={aiLoading || !inputText.trim()}
+              >
+                {aiLoading ? <Loader2 size={16} className="spin" /> : <Wand2 size={16} />}
+              </button>
+            </form>
+
+            {aiLoading && (
+              <div className="ai-loading-state" style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: 'var(--color-primary)', marginTop: '8px' }}>
+                <Loader2 size={14} className="spin" />
+                <span>AI 正在匹配食物库并计算热量...</span>
+              </div>
+            )}
+
+            {aiErrorMsg && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#ef4444', fontSize: '11px', marginTop: '10px', background: 'rgba(239, 68, 68, 0.06)', padding: '8px 12px', borderRadius: '8px' }}>
+                <AlertCircle size={14} />
+                <span>{aiErrorMsg}</span>
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
+              直接把薄荷健康复制的历史数据，或多日口语日志（如“6月1号体重75kg吃了鸡蛋；6.2号体重74.8...”）粘贴在下面，一键解析合并到对应日期。
+            </p>
+
+            <div style={{ marginTop: '12px' }}>
+              <textarea
+                value={importText}
+                onChange={(e) => setImportText(e.target.value)}
+                className="form-input"
+                placeholder={`粘贴历史记录文本，例如：\n“6月10日：体重 74.3kg，吃了两个煮鸡蛋。\n6月11日：体重 74.1kg，吃了鸡胸肉配糙米饭”`}
+                style={{ height: '90px', resize: 'none', fontSize: '12px', width: '100%', boxSizing: 'border-box', marginBottom: '8px', padding: '10px', borderRadius: '8px', border: '1px solid var(--card-border)', background: 'var(--input-bg)', color: 'var(--text-primary)', outline: 'none' }}
+                disabled={importLoading}
+              />
+
+              {importError && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#ff6b6b', fontSize: '11px', marginBottom: '10px', background: 'rgba(255,107,107,0.06)', padding: '8px 12px', borderRadius: '8px' }}>
+                  <AlertCircle size={14} />
+                  <span>{importError}</span>
+                </div>
+              )}
+
+              {importSuccessMsg && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#10b981', fontSize: '11px', marginBottom: '10px', background: 'rgba(16,185,129,0.06)', padding: '8px 12px', borderRadius: '8px' }}>
+                  <Check size={14} />
+                  <span>{importSuccessMsg}</span>
+                </div>
+              )}
+
+              <button 
+                type="button" 
+                className="btn-primary" 
+                style={{ width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '6px', padding: '10px', margin: 0 }}
+                onClick={handleHistoryImportSubmit}
+                disabled={importLoading || !importText.trim()}
+              >
+                {importLoading ? (
+                  <>
+                    <Loader2 size={16} className="spin" />
+                    AI 正在整理并同步历史数据...
+                  </>
+                ) : (
+                  <>
+                    <Import size={16} /> 一键导入并合并历史数据
+                  </>
+                )}
+              </button>
+            </div>
+          </>
         )}
       </div>
 

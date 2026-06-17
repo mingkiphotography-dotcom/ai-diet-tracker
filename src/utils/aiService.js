@@ -205,11 +205,7 @@ export const importHistoryFromText = async (rawText, apiKey) => {
 
   const userPrompt = `历史记录文本内容:\n"${rawText}"`;
 
-  if (config.aiEngine === 'openai') {
-    return callOpenAIAPI(config, systemPrompt, userPrompt);
-  }
-
-  const requestBody = {
+    const requestBody = {
     contents: [{ role: "user", parts: [{ text: userPrompt }] }],
     systemInstruction: { parts: [{ text: systemPrompt }] },
     generationConfig: {
@@ -254,7 +250,14 @@ export const importHistoryFromText = async (rawText, apiKey) => {
     }
   };
 
-  return callGeminiAPI(config.apiKey, requestBody);
+  const parsed = await (config.aiEngine === 'openai'
+    ? callOpenAIAPI(config, systemPrompt, userPrompt)
+    : callGeminiAPI(config.apiKey, requestBody));
+
+  return {
+    weights: Array.isArray(parsed?.weights) ? parsed.weights : [],
+    dietLogs: Array.isArray(parsed?.dietLogs) ? parsed.dietLogs : []
+  };
 };
 
 // 3. New: AI Smart Meal Composer API (自动食材搭配)
