@@ -47,7 +47,8 @@ const DietLog = ({
 
   // Sleep entry state for this date
   const [isEditingSleep, setIsEditingSleep] = useState(false);
-  const [localSleepInput, setLocalSleepInput] = useState('');
+  const [localSleepHours, setLocalSleepHours] = useState('');
+  const [localSleepMinutes, setLocalSleepMinutes] = useState('');
 
   // AI Flash Log state
   const [inputText, setInputText] = useState('');
@@ -157,11 +158,15 @@ const DietLog = ({
   };
 
   const handleSleepSaveClick = () => {
-    const val = parseFloat(localSleepInput);
-    if (isNaN(val) || val < 0) return;
+    const hours = parseInt(localSleepHours) || 0;
+    const minutes = parseInt(localSleepMinutes) || 0;
+    if (hours < 0 || minutes < 0) return;
+    if (hours === 0 && minutes === 0) return;
+    const val = Number((hours + minutes / 60).toFixed(4));
     onSaveSleep(selectedDate, val);
     setIsEditingSleep(false);
-    setLocalSleepInput('');
+    setLocalSleepHours('');
+    setLocalSleepMinutes('');
   };
 
   const handleSleepDeleteClick = () => {
@@ -389,15 +394,29 @@ const DietLog = ({
           <span style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '4px' }}>😴 睡眠时长</span>
           {isEditingSleep ? (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', width: '100%' }}>
-              <input 
-                type="number" 
-                step="0.1"
-                value={localSleepInput} 
-                onChange={(e) => setLocalSleepInput(e.target.value)} 
-                placeholder="小时"
-                style={{ width: '100%', padding: '4px', border: '1px solid var(--color-primary)', borderRadius: '6px', background: 'var(--card-bg)', color: 'var(--text-primary)', fontSize: '11px', textAlign: 'center', outline: 'none' }}
-                autoFocus
-              />
+              <div style={{ display: 'flex', gap: '2px', alignItems: 'center', width: '100%' }}>
+                <input 
+                  type="number" 
+                  min="0"
+                  max="24"
+                  value={localSleepHours} 
+                  onChange={(e) => setLocalSleepHours(e.target.value)} 
+                  placeholder="时"
+                  style={{ width: '45%', padding: '4px', border: '1px solid var(--color-primary)', borderRadius: '6px', background: 'var(--card-bg)', color: 'var(--text-primary)', fontSize: '11px', textAlign: 'center', outline: 'none' }}
+                  autoFocus
+                />
+                <span style={{ fontSize: '9px', color: 'var(--text-secondary)' }}>h</span>
+                <input 
+                  type="number" 
+                  min="0"
+                  max="59"
+                  value={localSleepMinutes} 
+                  onChange={(e) => setLocalSleepMinutes(e.target.value)} 
+                  placeholder="分"
+                  style={{ width: '45%', padding: '4px', border: '1px solid var(--color-primary)', borderRadius: '6px', background: 'var(--card-bg)', color: 'var(--text-primary)', fontSize: '11px', textAlign: 'center', outline: 'none' }}
+                />
+                <span style={{ fontSize: '9px', color: 'var(--text-secondary)' }}>m</span>
+              </div>
               <div style={{ display: 'flex', gap: '4px', width: '100%' }}>
                 <button className="btn-primary" style={{ padding: '2px 4px', minWidth: 'unset', fontSize: '9px', flex: 1, margin: 0 }} onClick={handleSleepSaveClick}>存</button>
                 <button className="btn-secondary" style={{ padding: '2px 4px', minWidth: 'unset', fontSize: '9px', flex: 1, margin: 0 }} onClick={() => setIsEditingSleep(false)}>x</button>
@@ -406,21 +425,42 @@ const DietLog = ({
           ) : (
             <div style={{ width: '100%' }}>
               <div style={{ fontWeight: 'bold', fontSize: '13px', color: dateSleep !== undefined ? 'var(--text-primary)' : 'var(--text-muted)' }}>
-                {dateSleep !== undefined ? `${dateSleep} 小时` : '未录入'}
+                {(() => {
+                  if (dateSleep === undefined || dateSleep === null) return '未录入';
+                  const h = Math.floor(dateSleep);
+                  const m = Math.round((dateSleep - h) * 60);
+                  return m === 0 ? `${h}小时` : `${h}时${m}分`;
+                })()}
               </div>
-              <div style={{ marginTop: '4px', display: 'flex', justifyContent: 'center', gap: '8px' }}>
+              <div style={{ marginTop: '4px', display: 'flex', justifyContent: 'center', gap: '6px', alignItems: 'center' }}>
                 {dateSleep !== undefined ? (
-                  <button 
-                    onClick={handleSleepDeleteClick}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: '9px', padding: 0 }}
-                  >
-                    删除
-                  </button>
+                  <>
+                    <button 
+                      onClick={() => {
+                        setIsEditingSleep(true);
+                        const h = Math.floor(dateSleep);
+                        const m = Math.round((dateSleep - h) * 60);
+                        setLocalSleepHours(String(h));
+                        setLocalSleepMinutes(String(m));
+                      }}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-primary)', fontSize: '9px', padding: 0 }}
+                    >
+                      编辑
+                    </button>
+                    <span style={{ color: 'var(--text-muted)', fontSize: '9px' }}>|</span>
+                    <button 
+                      onClick={handleSleepDeleteClick}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: '9px', padding: 0 }}
+                    >
+                      删除
+                    </button>
+                  </>
                 ) : (
                   <button 
                     onClick={() => {
                       setIsEditingSleep(true);
-                      setLocalSleepInput('');
+                      setLocalSleepHours('');
+                      setLocalSleepMinutes('');
                     }}
                     style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-primary)', fontSize: '9px', fontWeight: 'bold', padding: 0 }}
                   >
