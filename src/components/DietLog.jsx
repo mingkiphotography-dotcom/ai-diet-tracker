@@ -6,6 +6,8 @@ const DietLog = ({
   dietLogs, 
   weightLogs,
   mealPhotos,
+  burnedLogs,
+  sleepLogs,
   foodDatabase, 
   userProfile,
   onLogFood, 
@@ -14,6 +16,10 @@ const DietLog = ({
   onDeleteMealPhoto,
   onSaveWeight,
   onDeleteWeight,
+  onSaveBurned,
+  onDeleteBurned,
+  onSaveSleep,
+  onDeleteSleep,
   onQueryAi,
   onAiSuccess
 }) => {
@@ -33,6 +39,14 @@ const DietLog = ({
   // Weight entry state for this date
   const [isEditingWeight, setIsEditingWeight] = useState(false);
   const [localWeightInput, setLocalWeightInput] = useState('');
+
+  // Burned entry state for this date
+  const [isEditingBurned, setIsEditingBurned] = useState(false);
+  const [localBurnedInput, setLocalBurnedInput] = useState('');
+
+  // Sleep entry state for this date
+  const [isEditingSleep, setIsEditingSleep] = useState(false);
+  const [localSleepInput, setLocalSleepInput] = useState('');
 
   // AI Flash Log state
   const [inputText, setInputText] = useState('');
@@ -60,6 +74,8 @@ const DietLog = ({
   const dateLogs = dietLogs[selectedDate] || [];
   const datePhotos = mealPhotos[selectedDate] || {};
   const dateWeight = weightLogs.find(w => w.date === selectedDate)?.weight;
+  const dateBurned = burnedLogs[selectedDate];
+  const dateSleep = sleepLogs[selectedDate];
 
   // Filter logs by meal slot
   const getSlotLogs = (slot) => dateLogs.filter(item => item.mealType === slot);
@@ -125,11 +141,41 @@ const DietLog = ({
     }
   };
 
+  const handleBurnedSaveClick = () => {
+    const val = parseFloat(localBurnedInput);
+    if (isNaN(val) || val < 0) return;
+    onSaveBurned(selectedDate, val);
+    setIsEditingBurned(false);
+    setLocalBurnedInput('');
+  };
+
+  const handleBurnedDeleteClick = () => {
+    if (window.confirm(`确认删除 ${selectedDate} 的运动消耗记录吗？`)) {
+      onDeleteBurned(selectedDate);
+    }
+  };
+
+  const handleSleepSaveClick = () => {
+    const val = parseFloat(localSleepInput);
+    if (isNaN(val) || val < 0) return;
+    onSaveSleep(selectedDate, val);
+    setIsEditingSleep(false);
+    setLocalSleepInput('');
+  };
+
+  const handleSleepDeleteClick = () => {
+    if (window.confirm(`确认删除 ${selectedDate} 的睡眠时长记录吗？`)) {
+      onDeleteSleep(selectedDate);
+    }
+  };
+
   const handlePrevDay = () => {
     const d = new Date(selectedDate);
     d.setDate(d.getDate() - 1);
     setSelectedDate(d.toISOString().split('T')[0]);
     setIsEditingWeight(false);
+    setIsEditingBurned(false);
+    setIsEditingSleep(false);
   };
 
   const handleNextDay = () => {
@@ -137,6 +183,8 @@ const DietLog = ({
     d.setDate(d.getDate() + 1);
     setSelectedDate(d.toISOString().split('T')[0]);
     setIsEditingWeight(false);
+    setIsEditingBurned(false);
+    setIsEditingSleep(false);
   };
 
   // Filtered food list for search
@@ -238,54 +286,150 @@ const DietLog = ({
         </button>
       )}
 
-      {/* Date Weight Status Card */}
-      <div className="glass-card" style={{ padding: '12px 16px', marginBottom: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>⚖️ 该日体重:</span>
+      {/* 3-Column Daily Health Status Grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', marginBottom: '12px' }}>
+        {/* 1. Weight Item */}
+        <div className="glass-card" style={{ padding: '10px 8px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '80px', margin: 0, textAlign: 'center' }}>
+          <span style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '4px' }}>⚖️ 体重</span>
           {isEditingWeight ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', width: '100%' }}>
               <input 
                 type="number" 
                 step="0.1" 
                 value={localWeightInput} 
                 onChange={(e) => setLocalWeightInput(e.target.value)} 
                 placeholder="kg"
-                style={{ width: '70px', padding: '4px 8px', border: '1px solid var(--color-primary)', borderRadius: '6px', background: 'var(--card-bg)', color: 'var(--text-primary)', fontSize: '13px', outline: 'none' }}
+                style={{ width: '100%', padding: '4px', border: '1px solid var(--color-primary)', borderRadius: '6px', background: 'var(--card-bg)', color: 'var(--text-primary)', fontSize: '11px', textAlign: 'center', outline: 'none' }}
                 autoFocus
               />
-              <button className="btn-primary" style={{ padding: '4px 8px', minWidth: 'unset', fontSize: '11px', margin: 0 }} onClick={handleWeightSaveClick}>保存</button>
-              <button className="btn-secondary" style={{ padding: '4px 8px', minWidth: 'unset', fontSize: '11px', margin: 0 }} onClick={() => setIsEditingWeight(false)}>取消</button>
+              <div style={{ display: 'flex', gap: '4px', width: '100%' }}>
+                <button className="btn-primary" style={{ padding: '2px 4px', minWidth: 'unset', fontSize: '9px', flex: 1, margin: 0 }} onClick={handleWeightSaveClick}>存</button>
+                <button className="btn-secondary" style={{ padding: '2px 4px', minWidth: 'unset', fontSize: '9px', flex: 1, margin: 0 }} onClick={() => setIsEditingWeight(false)}>x</button>
+              </div>
             </div>
           ) : (
-            <span style={{ fontWeight: 'bold', fontSize: '14px', color: dateWeight ? 'var(--text-primary)' : 'var(--text-muted)' }}>
-              {dateWeight ? `${dateWeight} kg` : '未录入'}
-            </span>
+            <div style={{ width: '100%' }}>
+              <div style={{ fontWeight: 'bold', fontSize: '13px', color: dateWeight ? 'var(--text-primary)' : 'var(--text-muted)' }}>
+                {dateWeight ? `${dateWeight} kg` : '未录入'}
+              </div>
+              <div style={{ marginTop: '4px', display: 'flex', justifyContent: 'center', gap: '8px' }}>
+                {dateWeight ? (
+                  <button 
+                    onClick={handleWeightDeleteClick}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: '9px', padding: 0 }}
+                  >
+                    删除
+                  </button>
+                ) : (
+                  <button 
+                    onClick={() => {
+                      setIsEditingWeight(true);
+                      setLocalWeightInput('');
+                    }}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-primary)', fontSize: '9px', fontWeight: 'bold', padding: 0 }}
+                  >
+                    + 录入
+                  </button>
+                )}
+              </div>
+            </div>
           )}
         </div>
-        
-        {!isEditingWeight && (
-          <div>
-            {dateWeight ? (
-              <button 
-                onClick={handleWeightDeleteClick}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '4px', padding: 0 }}
-              >
-                <Trash2 size={13} />
-                <span>删除</span>
-              </button>
-            ) : (
-              <button 
-                onClick={() => {
-                  setIsEditingWeight(true);
-                  setLocalWeightInput('');
-                }}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-primary)', fontSize: '12px', fontWeight: 'bold', padding: 0 }}
-              >
-                + 录入体重
-              </button>
-            )}
-          </div>
-        )}
+
+        {/* 2. Active Burn Item */}
+        <div className="glass-card" style={{ padding: '10px 8px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '80px', margin: 0, textAlign: 'center' }}>
+          <span style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '4px' }}>🔥 运动消耗</span>
+          {isEditingBurned ? (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', width: '100%' }}>
+              <input 
+                type="number" 
+                value={localBurnedInput} 
+                onChange={(e) => setLocalBurnedInput(e.target.value)} 
+                placeholder="kcal"
+                style={{ width: '100%', padding: '4px', border: '1px solid var(--color-primary)', borderRadius: '6px', background: 'var(--card-bg)', color: 'var(--text-primary)', fontSize: '11px', textAlign: 'center', outline: 'none' }}
+                autoFocus
+              />
+              <div style={{ display: 'flex', gap: '4px', width: '100%' }}>
+                <button className="btn-primary" style={{ padding: '2px 4px', minWidth: 'unset', fontSize: '9px', flex: 1, margin: 0 }} onClick={handleBurnedSaveClick}>存</button>
+                <button className="btn-secondary" style={{ padding: '2px 4px', minWidth: 'unset', fontSize: '9px', flex: 1, margin: 0 }} onClick={() => setIsEditingBurned(false)}>x</button>
+              </div>
+            </div>
+          ) : (
+            <div style={{ width: '100%' }}>
+              <div style={{ fontWeight: 'bold', fontSize: '13px', color: dateBurned !== undefined ? 'var(--text-primary)' : 'var(--text-muted)' }}>
+                {dateBurned !== undefined ? `${dateBurned} kcal` : '未录入'}
+              </div>
+              <div style={{ marginTop: '4px', display: 'flex', justifyContent: 'center', gap: '8px' }}>
+                {dateBurned !== undefined ? (
+                  <button 
+                    onClick={handleBurnedDeleteClick}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: '9px', padding: 0 }}
+                  >
+                    删除
+                  </button>
+                ) : (
+                  <button 
+                    onClick={() => {
+                      setIsEditingBurned(true);
+                      setLocalBurnedInput('');
+                    }}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-primary)', fontSize: '9px', fontWeight: 'bold', padding: 0 }}
+                  >
+                    + 录入
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* 3. Sleep Item */}
+        <div className="glass-card" style={{ padding: '10px 8px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '80px', margin: 0, textAlign: 'center' }}>
+          <span style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '4px' }}>😴 睡眠时长</span>
+          {isEditingSleep ? (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', width: '100%' }}>
+              <input 
+                type="number" 
+                step="0.1"
+                value={localSleepInput} 
+                onChange={(e) => setLocalSleepInput(e.target.value)} 
+                placeholder="小时"
+                style={{ width: '100%', padding: '4px', border: '1px solid var(--color-primary)', borderRadius: '6px', background: 'var(--card-bg)', color: 'var(--text-primary)', fontSize: '11px', textAlign: 'center', outline: 'none' }}
+                autoFocus
+              />
+              <div style={{ display: 'flex', gap: '4px', width: '100%' }}>
+                <button className="btn-primary" style={{ padding: '2px 4px', minWidth: 'unset', fontSize: '9px', flex: 1, margin: 0 }} onClick={handleSleepSaveClick}>存</button>
+                <button className="btn-secondary" style={{ padding: '2px 4px', minWidth: 'unset', fontSize: '9px', flex: 1, margin: 0 }} onClick={() => setIsEditingSleep(false)}>x</button>
+              </div>
+            </div>
+          ) : (
+            <div style={{ width: '100%' }}>
+              <div style={{ fontWeight: 'bold', fontSize: '13px', color: dateSleep !== undefined ? 'var(--text-primary)' : 'var(--text-muted)' }}>
+                {dateSleep !== undefined ? `${dateSleep} 小时` : '未录入'}
+              </div>
+              <div style={{ marginTop: '4px', display: 'flex', justifyContent: 'center', gap: '8px' }}>
+                {dateSleep !== undefined ? (
+                  <button 
+                    onClick={handleSleepDeleteClick}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: '9px', padding: 0 }}
+                  >
+                    删除
+                  </button>
+                ) : (
+                  <button 
+                    onClick={() => {
+                      setIsEditingSleep(true);
+                      setLocalSleepInput('');
+                    }}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-primary)', fontSize: '9px', fontWeight: 'bold', padding: 0 }}
+                  >
+                    + 录入
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Date Nutrition Summary Card */}

@@ -95,16 +95,29 @@ export const compressImage = (file, callback) => {
   reader.readAsDataURL(file);
 };
 
-// New: Export diet and weight data to CSV (UTF-8 BOM to prevent Excel garbled text)
-export const exportToCsv = (dietLogs, weightLogs, userProfile) => {
-  // 1. Gather all dates from diet logs and weight logs
+// New: Export diet, weight, burned cals, and sleep data to CSV (UTF-8 BOM to prevent Excel garbled text)
+export const exportToCsv = (dietLogs, weightLogs, burnedLogs, sleepLogs, userProfile) => {
+  // 1. Gather all dates from all logs
   const dietDates = Object.keys(dietLogs);
   const weightDates = weightLogs.map(w => w.date);
-  const allDatesSet = new Set([...dietDates, ...weightDates]);
+  const burnedDates = Object.keys(burnedLogs || {});
+  const sleepDates = Object.keys(sleepLogs || {});
+  const allDatesSet = new Set([...dietDates, ...weightDates, ...burnedDates, ...sleepDates]);
   const sortedDates = Array.from(allDatesSet).sort((a, b) => new Date(a) - new Date(b));
 
   // 2. Prepare headers
-  const headers = ['日期', '当前体重(kg)', '今日热量上限(kcal)', '今日总摄入(kcal)', '碳水化合物(g)', '蛋白质(g)', '脂肪(g)', '膳食明细'];
+  const headers = [
+    '日期', 
+    '当前体重(kg)', 
+    '今日热量目标(kcal)', 
+    '已摄入热量(kcal)', 
+    '运动消耗(kcal)', 
+    '睡眠时长(小时)', 
+    '碳水化合物(g)', 
+    '蛋白质(g)', 
+    '脂肪(g)', 
+    '膳食明细'
+  ];
   let csvRows = [headers.join(',')];
 
   // 3. Populate rows
@@ -112,6 +125,10 @@ export const exportToCsv = (dietLogs, weightLogs, userProfile) => {
     // Find weight for the day
     const wRecord = weightLogs.find(w => w.date === date);
     const weightVal = wRecord ? wRecord.weight : '';
+
+    // Find burned calories and sleep for the day
+    const burnedVal = burnedLogs && burnedLogs[date] !== undefined ? burnedLogs[date] : '';
+    const sleepVal = sleepLogs && sleepLogs[date] !== undefined ? sleepLogs[date] : '';
 
     // Calculate daily diet totals
     const dayFoods = dietLogs[date] || [];
@@ -146,6 +163,8 @@ export const exportToCsv = (dietLogs, weightLogs, userProfile) => {
       weightVal,
       userProfile.targetCalories || 1500,
       totals.calories,
+      burnedVal,
+      sleepVal,
       totals.carb.toFixed(1),
       totals.protein.toFixed(1),
       totals.fat.toFixed(1),

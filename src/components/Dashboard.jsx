@@ -4,6 +4,7 @@ import { Flame, Sparkles, Wand2, Loader2, AlertCircle, Plus } from 'lucide-react
 const Dashboard = ({ 
   todayLogs, 
   userProfile, 
+  todayBurned,
   onAiSuccess, 
   onQueryAi,
   onAddQuickLog 
@@ -21,11 +22,11 @@ const Dashboard = ({
     return acc;
   }, { calories: 0, protein: 0, fat: 0, carb: 0 });
 
-  const targetCals = userProfile.targetCalories || 2000;
-  const burnedCals = userProfile.targetExercise || 300; // default/estimated
+  const targetCals = userProfile.targetCalories || 1500;
+  const burnedCals = todayBurned;
   
-  // Remaining = Target - Eaten + Burned (or simply Target - Eaten)
-  const remainingCals = Math.max(0, targetCals - eatenStats.calories);
+  // Remaining = Target - Eaten + Burned
+  const remainingCals = Math.max(0, targetCals - eatenStats.calories + burnedCals);
   
   // Circle SVG calculations
   const r = 55;
@@ -91,8 +92,17 @@ const Dashboard = ({
                 <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#a855f7' }}></span>
                 已摄入
               </span>
-              <span className="cal-detail-value" style={{ color: 'var(--color-calories)' }}>
+              <span className="cal-detail-value" style={{ color: 'var(--text-primary)' }}>
                 {eatenStats.calories} <span style={{ fontSize: '10px', fontWeight: '400' }}>kcal</span>
+              </span>
+            </div>
+            <div className="cal-detail-item">
+              <span className="cal-detail-label">
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--color-primary)' }}></span>
+                运动消耗
+              </span>
+              <span className="cal-detail-value" style={{ color: 'var(--color-primary)', fontWeight: 'bold' }}>
+                +{burnedCals} <span style={{ fontSize: '10px', fontWeight: '400' }}>kcal</span>
               </span>
             </div>
           </div>

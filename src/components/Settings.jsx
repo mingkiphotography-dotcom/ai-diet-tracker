@@ -10,6 +10,8 @@ const Settings = ({
   onClearData,
   weightLogs,
   dietLogs,
+  burnedLogs,
+  sleepLogs,
   onImportHistoryData
 }) => {
   const [apiKey, setApiKey] = useState(userProfile.apiKey || '');
@@ -152,7 +154,7 @@ const Settings = ({
   };
 
   const handleExportData = () => {
-    exportToCsv(dietLogs, weightLogs, userProfile);
+    exportToCsv(dietLogs, weightLogs, burnedLogs, sleepLogs, userProfile);
   };
 
   return (

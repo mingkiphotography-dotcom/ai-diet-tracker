@@ -73,6 +73,16 @@ function App() {
     return safeJsonParse(safeStorage.getItem('ai_diet_diagnosis'), null);
   });
 
+  // Daily exercise/burned calories
+  const [burnedLogs, setBurnedLogs] = useState(() => {
+    return safeJsonParse(safeStorage.getItem('ai_diet_burned'), {});
+  });
+
+  // Daily sleep hours
+  const [sleepLogs, setSleepLogs] = useState(() => {
+    return safeJsonParse(safeStorage.getItem('ai_diet_sleep'), {});
+  });
+
   // Today's context
   const todayStr = getTodayDateString();
   const todayLogs = dietLogs[todayStr] || [];
@@ -113,6 +123,14 @@ function App() {
   useEffect(() => {
     safeStorage.setItem('ai_diet_diagnosis', JSON.stringify(diagnosisResult));
   }, [diagnosisResult]);
+
+  useEffect(() => {
+    safeStorage.setItem('ai_diet_burned', JSON.stringify(burnedLogs));
+  }, [burnedLogs]);
+
+  useEffect(() => {
+    safeStorage.setItem('ai_diet_sleep', JSON.stringify(sleepLogs));
+  }, [sleepLogs]);
 
   useEffect(() => {
     safeStorage.setItem('ai_diet_api_key', apiKey);
@@ -176,6 +194,34 @@ function App() {
     alert('今日体重记录已更新！');
   };
 
+  const handleSaveBurned = (date, calories) => {
+    const val = parseFloat(calories);
+    if (isNaN(val) || val < 0) return;
+    setBurnedLogs(prev => ({ ...prev, [date]: val }));
+  };
+
+  const handleDeleteBurned = (date) => {
+    setBurnedLogs(prev => {
+      const next = { ...prev };
+      delete next[date];
+      return next;
+    });
+  };
+
+  const handleSaveSleep = (date, hours) => {
+    const val = parseFloat(hours);
+    if (isNaN(val) || val < 0) return;
+    setSleepLogs(prev => ({ ...prev, [date]: val }));
+  };
+
+  const handleDeleteSleep = (date) => {
+    setSleepLogs(prev => {
+      const next = { ...prev };
+      delete next[date];
+      return next;
+    });
+  };
+
   const handleSaveProfile = (newProfile) => {
     setApiKey(newProfile.apiKey);
     setUserProfile(newProfile);
@@ -189,6 +235,8 @@ function App() {
     safeStorage.setItem('ai_diet_weights', '');
     safeStorage.setItem('ai_diet_photos', '');
     safeStorage.setItem('ai_diet_diagnosis', '');
+    safeStorage.setItem('ai_diet_burned', '');
+    safeStorage.setItem('ai_diet_sleep', '');
     
     setApiKey('');
     setUserProfile({
@@ -204,6 +252,8 @@ function App() {
     setWeightLogs([]);
     setMealPhotos({});
     setDiagnosisResult(null);
+    setBurnedLogs({});
+    setSleepLogs({});
     setActiveTab('dashboard');
     alert('本地数据已全部清空，恢复初始状态！');
   };
@@ -307,9 +357,11 @@ function App() {
           <Dashboard 
             todayLogs={todayLogs}
             userProfile={userProfile}
+            todayBurned={burnedLogs[todayStr] !== undefined ? burnedLogs[todayStr] : 0}
             onQueryAi={handleQueryAi}
             onAiSuccess={(data) => {
               setAiParsedResult(data);
+              setAiLogTargetDate(todayStr);
               setIsAiModalOpen(true);
             }}
           />
@@ -320,6 +372,8 @@ function App() {
             dietLogs={dietLogs}
             weightLogs={weightLogs}
             mealPhotos={mealPhotos}
+            burnedLogs={burnedLogs}
+            sleepLogs={sleepLogs}
             foodDatabase={fullFoodDatabase}
             userProfile={userProfile}
             onLogFood={handleLogFood}
@@ -328,6 +382,10 @@ function App() {
             onDeleteMealPhoto={handleDeleteMealPhoto}
             onSaveWeight={handleSaveWeight}
             onDeleteWeight={handleDeleteWeight}
+            onSaveBurned={handleSaveBurned}
+            onDeleteBurned={handleDeleteBurned}
+            onSaveSleep={handleSaveSleep}
+            onDeleteSleep={handleDeleteSleep}
             onQueryAi={handleQueryAi}
             onAiSuccess={(data, date) => {
               setAiParsedResult(data);
@@ -425,6 +483,8 @@ function App() {
             onClearData={handleClearData}
             weightLogs={weightLogs}
             dietLogs={dietLogs}
+            burnedLogs={burnedLogs}
+            sleepLogs={sleepLogs}
             onImportHistoryData={handleImportHistoryData}
           />
         )}
