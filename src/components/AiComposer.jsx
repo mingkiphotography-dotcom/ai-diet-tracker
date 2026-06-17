@@ -10,6 +10,7 @@ const AiComposer = ({
   setActiveTab 
 }) => {
   const [selectedFoodIds, setSelectedFoodIds] = useState([]);
+  const [cookingMethod, setCookingMethod] = useState('any'); // 'any', 'microwave', 'airfryer', 'oven', 'stove'
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [generatedRecipe, setGeneratedRecipe] = useState(null);
@@ -61,7 +62,7 @@ const AiComposer = ({
     const selectedFoods = foodDatabase.filter(f => selectedFoodIds.includes(f.id));
 
     try {
-      const result = await generateSmartMeal(selectedFoods, remaining, userProfile.apiKey);
+      const result = await generateSmartMeal(selectedFoods, remaining, cookingMethod, userProfile.apiKey);
       setGeneratedRecipe(result);
     } catch (err) {
       setErrorMsg(err.message || 'AI 智能配餐生成失败，请重试');
@@ -174,6 +175,44 @@ const AiComposer = ({
                   </button>
                 );
               })}
+            </div>
+
+            {/* 3. Select Cooking Method */}
+            <div style={{ marginTop: '16px', borderTop: '1px solid rgba(0,0,0,0.03)', paddingTop: '16px' }}>
+              <h5 style={{ fontSize: '13px', fontWeight: 'bold', marginBottom: '8px', color: 'var(--text-primary)' }}>
+                🍳 烹饪工具 / 方式偏好：
+              </h5>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px' }}>
+                {[
+                  { key: 'any', label: '不限 (智能推荐)' },
+                  { key: '微波炉', label: '微波炉' },
+                  { key: '空气炸锅', label: '空气炸锅' },
+                  { key: '烤箱', label: '烤箱' },
+                  { key: '少油煎炒', label: '少油煎炒' },
+                  { key: '水煮/清蒸', label: '水煮清蒸' }
+                ].map(method => {
+                  const isMethodSelected = cookingMethod === method.key;
+                  return (
+                    <button
+                      key={method.key}
+                      type="button"
+                      className="btn-secondary"
+                      style={{
+                        padding: '8px 4px',
+                        fontSize: '11px',
+                        background: isMethodSelected ? 'rgba(16,185,129,0.08)' : undefined,
+                        borderColor: isMethodSelected ? 'var(--color-primary)' : undefined,
+                        color: isMethodSelected ? 'var(--color-primary)' : 'var(--text-primary)',
+                        borderWidth: '1.5px',
+                        margin: 0
+                      }}
+                      onClick={() => setCookingMethod(method.key)}
+                    >
+                      {method.label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             {errorMsg && (

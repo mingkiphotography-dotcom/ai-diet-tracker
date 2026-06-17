@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Trash2, Search, X, Camera, Eye, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Trash2, Search, X, Camera, Eye, ChevronLeft, ChevronRight, Sparkles, Wand2, Loader2, AlertCircle } from 'lucide-react';
 import { calculateNutrients, compressImage, getTodayDateString } from '../utils/helpers';
 
 const DietLog = ({ 
@@ -13,7 +13,9 @@ const DietLog = ({
   onSaveMealPhoto,
   onDeleteMealPhoto,
   onSaveWeight,
-  onDeleteWeight
+  onDeleteWeight,
+  onQueryAi,
+  onAiSuccess
 }) => {
   const todayStr = getTodayDateString();
   const [selectedDate, setSelectedDate] = useState(todayStr);
@@ -31,6 +33,28 @@ const DietLog = ({
   // Weight entry state for this date
   const [isEditingWeight, setIsEditingWeight] = useState(false);
   const [localWeightInput, setLocalWeightInput] = useState('');
+
+  // AI Flash Log state
+  const [inputText, setInputText] = useState('');
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiErrorMsg, setAiErrorMsg] = useState('');
+
+  const handleAiSubmit = async (e) => {
+    e.preventDefault();
+    if (!inputText.trim()) return;
+    setAiLoading(true);
+    setAiErrorMsg('');
+    try {
+      await onQueryAi(inputText, (data) => {
+        onAiSuccess(data, selectedDate);
+        setInputText('');
+      });
+    } catch (err) {
+      setAiErrorMsg(err.message || 'AI 智能解析失败，请检查网络或配置');
+    } finally {
+      setAiLoading(false);
+    }
+  };
 
   // Get date specific data
   const dateLogs = dietLogs[selectedDate] || [];
@@ -309,6 +333,48 @@ const DietLog = ({
             </span>
           </div>
         </div>
+      </div>
+
+      {/* AI Magic Box for the selected date */}
+      <div className="glass-card ai-magic-box" style={{ padding: '16px 18px', marginBottom: '16px' }}>
+        <div className="ai-magic-title" style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 'bold' }}>
+          <Sparkles size={18} style={{ color: '#c084fc' }} />
+          <span style={{ color: 'var(--text-primary)' }}>AI 闪电智能记账 ({selectedDate === todayStr ? '今天' : selectedDate})</span>
+        </div>
+        <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
+          支持口语化输入，AI 自动拆分克数和卡路里，并将记录写入当前选中的日期。
+        </p>
+
+        <form onSubmit={handleAiSubmit} className="ai-input-wrapper" style={{ marginTop: '12px' }}>
+          <textarea
+            value={inputText}
+            onChange={(e) => setInputText(e.target.value)}
+            placeholder={`输入当前日期所吃的食物，例如：\n“早上吃了两个煮鸡蛋，午餐吃了150克生鸡胸肉加一盘西蓝花”`}
+            className="ai-textarea"
+            disabled={aiLoading}
+          />
+          <button 
+            type="submit" 
+            className="ai-submit-btn" 
+            disabled={aiLoading || !inputText.trim()}
+          >
+            {aiLoading ? <Loader2 size={16} className="spin" /> : <Wand2 size={16} />}
+          </button>
+        </form>
+
+        {aiLoading && (
+          <div className="ai-loading-state" style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: 'var(--color-primary)', marginTop: '8px' }}>
+            <Loader2 size={14} className="spin" />
+            <span>AI 正在匹配食物库并计算热量...</span>
+          </div>
+        )}
+
+        {aiErrorMsg && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#ef4444', fontSize: '11px', marginTop: '10px', background: 'rgba(239, 68, 68, 0.06)', padding: '8px 12px', borderRadius: '8px' }}>
+            <AlertCircle size={14} />
+            <span>{aiErrorMsg}</span>
+          </div>
+        )}
       </div>
 
       <h3 style={{ fontFamily: 'var(--font-title)', fontWeight: 800, fontSize: '18px', marginBottom: '12px', color: 'var(--text-primary)' }}>

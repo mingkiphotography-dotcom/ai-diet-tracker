@@ -126,7 +126,7 @@ export const importHistoryFromText = async (rawText, apiKey) => {
 };
 
 // 3. New: AI Smart Meal Composer API (自动食材搭配)
-export const generateSmartMeal = async (selectedFoods, remainingMacros, apiKey) => {
+export const generateSmartMeal = async (selectedFoods, remainingMacros, cookingMethod, apiKey) => {
   if (!apiKey) {
     throw new Error('请先在设置中配置 Gemini API Key');
   }
@@ -134,6 +134,10 @@ export const generateSmartMeal = async (selectedFoods, remainingMacros, apiKey) 
   const foodList = selectedFoods.map(f => 
     `${f.name} (每100g: 热量 ${f.calories}kcal, 蛋白质 ${f.protein}g, 脂肪 ${f.fat}g, 碳水 ${f.carb}g, 纤维 ${f.fiber}g)`
   ).join('\n');
+
+  const methodInstruction = cookingMethod === 'any' 
+    ? '不限，可以混合使用微波炉、空气炸锅、煎、煮、烤等最省时健康的制作方式。'
+    : `主要使用指定的烹饪工具/方式：【${cookingMethod}】进行制作。所有的烹饪步骤和做法说明必须是适配该烹饪工具的（例如：若是微波炉，则应使用微波容器加热、加盖高火叮几分钟等步骤；若是空气炸锅，则应说明铺纸锡纸、设定烘烤温度和具体时间等步骤）。`;
 
   const systemPrompt = `你是一个减脂期AI智能配餐顾问。
 用户今天接下来这一餐（或这一天）需要补充的目标缺口营养素为：
@@ -150,7 +154,7 @@ ${foodList}
 2. 必须保证所有食材的克数为正数，单种食物克数一般在 10g 到 300g 之间，且重量要符合正常烹饪习惯（如鸡蛋一般按50g的倍数，肉类按20g/50g倍数等）。
 3. 绝对不能超过用户的剩余卡路里上限。
 4. 给这顿搭配出的减脂餐起一个美味的名字。
-5. 给出这顿饭的具体“烹饪步骤”和“控油控钠调味建议”。调味必须写清楚具体放几克盐、多少毫升低钠酱油、黑胡椒等，强调少油少盐防长水肿。
+5. 给出这顿饭的具体“烹饪步骤”和“控油控钠调味建议”。${methodInstruction}调味必须写清楚具体放几克盐、多少毫升低钠酱油、黑胡椒等，强调少油少盐防长水肿。
 6. 返回标准的 JSON 格式。`;
 
   const requestBody = {

@@ -84,6 +84,7 @@ function App() {
   // AI Modal states
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
   const [aiParsedResult, setAiParsedResult] = useState(null);
+  const [aiLogTargetDate, setAiLogTargetDate] = useState(todayStr);
 
   // New weight input state
   const [weightInput, setWeightInput] = useState('');
@@ -215,7 +216,7 @@ function App() {
 
   const handleAiModalConfirm = (loggedItems) => {
     loggedItems.forEach(item => {
-      handleLogFood(item);
+      handleLogFood(item, aiLogTargetDate);
     });
     setActiveTab('diary');
   };
@@ -327,6 +328,12 @@ function App() {
             onDeleteMealPhoto={handleDeleteMealPhoto}
             onSaveWeight={handleSaveWeight}
             onDeleteWeight={handleDeleteWeight}
+            onQueryAi={handleQueryAi}
+            onAiSuccess={(data, date) => {
+              setAiParsedResult(data);
+              setAiLogTargetDate(date);
+              setIsAiModalOpen(true);
+            }}
           />
         )}
 
