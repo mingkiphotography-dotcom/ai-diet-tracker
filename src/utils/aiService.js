@@ -293,7 +293,11 @@ const callGeminiAPI = async (apiKey, requestBody) => {
 
     if (!response.ok) {
       const errData = await response.json().catch(() => ({}));
-      throw new Error(errData.error?.message || `API 请求失败，HTTP 状态码: ${response.status}`);
+      let msg = errData.error?.message || `API 请求失败，HTTP 状态码: ${response.status}`;
+      if (msg.includes('Quota exceeded') || msg.includes('quota') || response.status === 429) {
+        msg = 'Gemini API 请求频率或额度超限（免费层限制为每分钟 15 次或 20 次请求）。请等待约 1 分钟后重试即可恢复。如果你使用频繁，建议在 Google AI Studio 中为 API Key 开启 Pay-as-you-go 付费模式（费用极低，仅按量计费）。';
+      }
+      throw new Error(msg);
     }
 
     const data = await response.json();
