@@ -1,16 +1,22 @@
 import React, { useState } from 'react';
-import { Plus, Trash2, Search, X, Camera, Eye, Trash } from 'lucide-react';
-import { calculateNutrients, compressImage } from '../utils/helpers';
+import { Plus, Trash2, Search, X, Camera, Eye, ChevronLeft, ChevronRight } from 'lucide-react';
+import { calculateNutrients, compressImage, getTodayDateString } from '../utils/helpers';
 
 const DietLog = ({ 
-  todayLogs, 
+  dietLogs, 
+  weightLogs,
+  mealPhotos,
   foodDatabase, 
+  userProfile,
   onLogFood, 
   onDeleteFood,
-  mealPhotos,
   onSaveMealPhoto,
-  onDeleteMealPhoto
+  onDeleteMealPhoto,
+  onSaveWeight,
+  onDeleteWeight
 }) => {
+  const todayStr = getTodayDateString();
+  const [selectedDate, setSelectedDate] = useState(todayStr);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [selectedMealSlot, setSelectedMealSlot] = useState('breakfast');
   
@@ -22,8 +28,17 @@ const DietLog = ({
   // Preview Image State
   const [previewImageUrl, setPreviewImageUrl] = useState(null);
 
+  // Weight entry state for this date
+  const [isEditingWeight, setIsEditingWeight] = useState(false);
+  const [localWeightInput, setLocalWeightInput] = useState('');
+
+  // Get date specific data
+  const dateLogs = dietLogs[selectedDate] || [];
+  const datePhotos = mealPhotos[selectedDate] || {};
+  const dateWeight = weightLogs.find(w => w.date === selectedDate)?.weight;
+
   // Filter logs by meal slot
-  const getSlotLogs = (slot) => todayLogs.filter(item => item.mealType === slot);
+  const getSlotLogs = (slot) => dateLogs.filter(item => item.mealType === slot);
   
   const getSlotCalories = (slot) => {
     return getSlotLogs(slot).reduce((sum, item) => sum + (item.calories || 0), 0);
@@ -57,7 +72,7 @@ const DietLog = ({
       carb: nutrition.carb,
       fiber: nutrition.fiber,
       mealType: selectedMealSlot
-    });
+    }, selectedDate);
 
     setIsAddModalOpen(false);
   };
@@ -66,16 +81,74 @@ const DietLog = ({
     const file = e.target.files[0];
     if (!file) return;
 
-    // Use local compression helper to reduce size to ~20-40kb before saving
+    // Use local compression helper to reduce size before saving
     compressImage(file, (base64Str) => {
-      onSaveMealPhoto(slot, base64Str);
+      onSaveMealPhoto(slot, base64Str, selectedDate);
     });
+  };
+
+  const handleWeightSaveClick = () => {
+    const w = parseFloat(localWeightInput);
+    if (!w || w <= 0) return;
+    onSaveWeight(selectedDate, w);
+    setIsEditingWeight(false);
+    setLocalWeightInput('');
+  };
+
+  const handleWeightDeleteClick = () => {
+    if (window.confirm(`确认删除 ${selectedDate} 的体重记录吗？`)) {
+      onDeleteWeight(selectedDate);
+    }
+  };
+
+  const handlePrevDay = () => {
+    const d = new Date(selectedDate);
+    d.setDate(d.getDate() - 1);
+    setSelectedDate(d.toISOString().split('T')[0]);
+    setIsEditingWeight(false);
+  };
+
+  const handleNextDay = () => {
+    const d = new Date(selectedDate);
+    d.setDate(d.getDate() + 1);
+    setSelectedDate(d.toISOString().split('T')[0]);
+    setIsEditingWeight(false);
   };
 
   // Filtered food list for search
   const filteredFoods = foodDatabase.filter(food => 
     food.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  // Nutrition Stats Calculations
+  const eatenStats = dateLogs.reduce((acc, item) => {
+    acc.calories += item.calories || 0;
+    acc.protein += item.protein || 0;
+    acc.fat += item.fat || 0;
+    acc.carb += item.carb || 0;
+    return acc;
+  }, { calories: 0, protein: 0, fat: 0, carb: 0 });
+
+  const targetCals = userProfile.targetCalories || 1500;
+  const targetProtein = userProfile.targetProtein || 136;
+  const targetFat = userProfile.targetFat || 45;
+  const targetCarb = userProfile.targetCarb || 140;
+
+  // Macro Energy Ratios (1g Carb=4kcal, 1g Protein=4kcal, 1g Fat=9kcal)
+  const carbCal = eatenStats.carb * 4;
+  const proteinCal = eatenStats.protein * 4;
+  const fatCal = eatenStats.fat * 9;
+  const totalMacroCal = carbCal + proteinCal + fatCal;
+
+  const carbRatio = totalMacroCal > 0 ? Math.round((carbCal / totalMacroCal) * 100) : 0;
+  const proteinRatio = totalMacroCal > 0 ? Math.round((proteinCal / totalMacroCal) * 100) : 0;
+  const fatRatio = totalMacroCal > 0 ? Math.round((fatCal / totalMacroCal) * 100) : 0;
+
+  // Gram Ratios
+  const totalMacroGrams = eatenStats.carb + eatenStats.protein + eatenStats.fat;
+  const carbGramRatio = totalMacroGrams > 0 ? Math.round((eatenStats.carb / totalMacroGrams) * 100) : 0;
+  const proteinGramRatio = totalMacroGrams > 0 ? Math.round((eatenStats.protein / totalMacroGrams) * 100) : 0;
+  const fatGramRatio = totalMacroGrams > 0 ? Math.round((eatenStats.fat / totalMacroGrams) * 100) : 0;
 
   const mealSlots = [
     { key: 'breakfast', label: '早餐' },
@@ -86,14 +159,166 @@ const DietLog = ({
 
   return (
     <div>
-      <h3 style={{ fontFamily: 'var(--font-title)', fontWeight: 800, fontSize: '20px', marginBottom: '16px', color: 'var(--text-primary)' }}>
-        今日饮食日志
+      {/* Date Navigation Bar */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: '12px' }}>
+        <button 
+          className="btn-secondary" 
+          style={{ padding: '8px 10px', minWidth: 'unset', display: 'flex', alignItems: 'center', margin: 0 }} 
+          onClick={handlePrevDay}
+        >
+          <ChevronLeft size={16} />
+        </button>
+        
+        <input 
+          type="date" 
+          value={selectedDate} 
+          onChange={(e) => {
+            setSelectedDate(e.target.value);
+            setIsEditingWeight(false);
+          }} 
+          style={{ 
+            background: 'var(--card-bg)',
+            border: '1px solid var(--border-color)', 
+            borderRadius: '10px', 
+            padding: '8px 12px', 
+            color: 'var(--text-primary)', 
+            fontSize: '14px',
+            textAlign: 'center',
+            fontFamily: 'inherit',
+            fontWeight: '600',
+            outline: 'none',
+            flex: 1,
+            boxShadow: '0 2px 8px rgba(0,0,0,0.02)'
+          }} 
+        />
+        
+        <button 
+          className="btn-secondary" 
+          style={{ padding: '8px 10px', minWidth: 'unset', display: 'flex', alignItems: 'center', margin: 0 }} 
+          onClick={handleNextDay}
+        >
+          <ChevronRight size={16} />
+        </button>
+      </div>
+
+      {selectedDate !== todayStr && (
+        <button 
+          className="btn-secondary" 
+          style={{ fontSize: '11px', padding: '4px 8px', minWidth: 'unset', width: '100%', marginBottom: '12px', borderRadius: '6px' }}
+          onClick={() => {
+            setSelectedDate(todayStr);
+            setIsEditingWeight(false);
+          }}
+        >
+          返回今天
+        </button>
+      )}
+
+      {/* Date Weight Status Card */}
+      <div className="glass-card" style={{ padding: '12px 16px', marginBottom: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>⚖️ 该日体重:</span>
+          {isEditingWeight ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <input 
+                type="number" 
+                step="0.1" 
+                value={localWeightInput} 
+                onChange={(e) => setLocalWeightInput(e.target.value)} 
+                placeholder="kg"
+                style={{ width: '70px', padding: '4px 8px', border: '1px solid var(--color-primary)', borderRadius: '6px', background: 'var(--card-bg)', color: 'var(--text-primary)', fontSize: '13px', outline: 'none' }}
+                autoFocus
+              />
+              <button className="btn-primary" style={{ padding: '4px 8px', minWidth: 'unset', fontSize: '11px', margin: 0 }} onClick={handleWeightSaveClick}>保存</button>
+              <button className="btn-secondary" style={{ padding: '4px 8px', minWidth: 'unset', fontSize: '11px', margin: 0 }} onClick={() => setIsEditingWeight(false)}>取消</button>
+            </div>
+          ) : (
+            <span style={{ fontWeight: 'bold', fontSize: '14px', color: dateWeight ? 'var(--text-primary)' : 'var(--text-muted)' }}>
+              {dateWeight ? `${dateWeight} kg` : '未录入'}
+            </span>
+          )}
+        </div>
+        
+        {!isEditingWeight && (
+          <div>
+            {dateWeight ? (
+              <button 
+                onClick={handleWeightDeleteClick}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '4px', padding: 0 }}
+              >
+                <Trash2 size={13} />
+                <span>删除</span>
+              </button>
+            ) : (
+              <button 
+                onClick={() => {
+                  setIsEditingWeight(true);
+                  setLocalWeightInput('');
+                }}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-primary)', fontSize: '12px', fontWeight: 'bold', padding: 0 }}
+              >
+                + 录入体重
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Date Nutrition Summary Card */}
+      <div className="glass-card" style={{ padding: '16px 18px', marginBottom: '16px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+          <span style={{ fontSize: '14px', fontWeight: 'bold', color: 'var(--text-primary)' }}>📊 营养摄入概览</span>
+          <span style={{ fontSize: '12px', fontWeight: '600', color: eatenStats.calories > targetCals ? '#ef4444' : 'var(--text-secondary)' }}>
+            热量: {eatenStats.calories} / {targetCals} kcal
+          </span>
+        </div>
+        
+        {/* Progress Bar for Calories */}
+        <div style={{ height: '6px', background: 'rgba(0,0,0,0.04)', borderRadius: '3px', overflow: 'hidden', marginBottom: '16px' }}>
+          <div style={{ height: '100%', width: `${Math.min(100, (eatenStats.calories / targetCals) * 100)}%`, background: eatenStats.calories > targetCals ? '#ef4444' : 'var(--color-primary)', borderRadius: '3px' }}></div>
+        </div>
+
+        {/* Macros Table */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', fontSize: '12px', borderBottom: '1px solid rgba(0,0,0,0.03)', paddingBottom: '12px' }}>
+          <div style={{ flex: 1, textAlign: 'center' }}>
+            <div style={{ color: 'var(--text-secondary)', marginBottom: '4px' }}>碳水</div>
+            <div style={{ fontWeight: 'bold', color: 'var(--text-primary)' }}>{Math.round(eatenStats.carb)}g / {targetCarb}g</div>
+          </div>
+          <div style={{ flex: 1, textAlign: 'center' }}>
+            <div style={{ color: 'var(--text-secondary)', marginBottom: '4px' }}>蛋白</div>
+            <div style={{ fontWeight: 'bold', color: 'var(--text-primary)' }}>{Math.round(eatenStats.protein)}g / {targetProtein}g</div>
+          </div>
+          <div style={{ flex: 1, textAlign: 'center' }}>
+            <div style={{ color: 'var(--text-secondary)', marginBottom: '4px' }}>脂肪</div>
+            <div style={{ fontWeight: 'bold', color: 'var(--text-primary)' }}>{Math.round(eatenStats.fat)}g / {targetFat}g</div>
+          </div>
+        </div>
+
+        {/* Macro Energy / Gram Ratios (碳氮比) */}
+        <div style={{ marginTop: '12px', fontSize: '11px', display: 'flex', flexDirection: 'column', gap: '6px', color: 'var(--text-muted)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span>🔥 热量占比 (碳水:蛋白:脂肪):</span>
+            <span style={{ fontWeight: 'bold', color: 'var(--text-primary)' }}>
+              {carbRatio}% : {proteinRatio}% : {fatRatio}%
+            </span>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span>⚖️ 克数占比 (碳水:蛋白:脂肪):</span>
+            <span style={{ fontWeight: 'bold', color: 'var(--text-primary)' }}>
+              {carbGramRatio}% : {proteinGramRatio}% : {fatGramRatio}%
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <h3 style={{ fontFamily: 'var(--font-title)', fontWeight: 800, fontSize: '18px', marginBottom: '12px', color: 'var(--text-primary)' }}>
+        {selectedDate === todayStr ? '今日饮食日志' : `${selectedDate} 饮食日志`}
       </h3>
 
       {mealSlots.map(slot => {
         const logs = getSlotLogs(slot.key);
         const slotCals = getSlotCalories(slot.key);
-        const slotPhoto = mealPhotos[slot.key];
+        const slotPhoto = datePhotos[slot.key];
 
         return (
           <div key={slot.key} className="glass-card" style={{ padding: '16px 18px' }}>
@@ -150,7 +375,7 @@ const DietLog = ({
                   <button 
                     type="button" 
                     className="action-icon-btn" 
-                    onClick={() => onDeleteMealPhoto(slot.key)}
+                    onClick={() => onDeleteMealPhoto(slot.key, selectedDate)}
                     style={{ background: 'rgba(239,68,68,0.2)', backdropFilter: 'blur(4px)', color: '#ff6b6b', border: '1px solid rgba(239,68,68,0.3)', width: '28px', height: '28px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                   >
                     <Trash2 size={14} />
@@ -173,7 +398,7 @@ const DietLog = ({
                     <span className="meal-item-cals">{item.calories} kcal</span>
                     <button 
                       className="action-icon-btn" 
-                      onClick={() => onDeleteFood(item)}
+                      onClick={() => onDeleteFood(item, selectedDate)}
                       style={{ color: 'var(--text-muted)' }}
                     >
                       <Trash2 size={14} />
@@ -248,8 +473,8 @@ const DietLog = ({
               </div>
             ) : (
               <div style={{ marginTop: '10px' }}>
-                <div className="glass-card" style={{ padding: '16px', background: '#f8faf9', marginBottom: '20px' }}>
-                  <div style={{ fontWeight: 'bold', fontSize: '16px' }}>{selectedFood.name}</div>
+                <div className="glass-card" style={{ padding: '16px', background: 'var(--card-bg)', border: '1px solid var(--border-color)', marginBottom: '20px' }}>
+                  <div style={{ fontWeight: 'bold', fontSize: '16px', color: 'var(--text-primary)' }}>{selectedFood.name}</div>
                   <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
                     每100g/ml基准: {selectedFood.calories} kcal · 碳水{selectedFood.carb}g · 蛋白{selectedFood.protein}g · 脂肪{selectedFood.fat}g
                   </div>
@@ -295,7 +520,7 @@ const DietLog = ({
               alignItems: 'center', 
               paddingBottom: '20px' 
             }}
-            onClick={(e) => e.stopPropagation()} // Stop propagation
+            onClick={(e) => e.stopPropagation()}
           >
             <div style={{ alignSelf: 'flex-end', marginBottom: '10px' }}>
               <button 

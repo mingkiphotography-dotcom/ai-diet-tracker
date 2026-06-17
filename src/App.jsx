@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Flame, Utensils, Sparkles, Scale, User, 
-  Check, Info, AlertCircle 
+  Check, Info, AlertCircle, Trash2
 } from 'lucide-react';
 
 // Subcomponents
@@ -119,7 +119,7 @@ function App() {
   }, [apiKey]);
 
   // 3. Actions
-  const handleLogFood = (foodItem) => {
+  const handleLogFood = (foodItem, date = todayStr) => {
     const logItem = {
       ...foodItem,
       id: generateId(),
@@ -127,20 +127,20 @@ function App() {
     };
     
     setDietLogs(prev => {
-      const todayLogs = prev[todayStr] || [];
+      const dayLogs = prev[date] || [];
       return {
         ...prev,
-        [todayStr]: [...todayLogs, logItem]
+        [date]: [...dayLogs, logItem]
       };
     });
   };
 
-  const handleDeleteFood = (foodItem) => {
+  const handleDeleteFood = (foodItem, date = todayStr) => {
     setDietLogs(prev => {
-      const todayLogs = prev[todayStr] || [];
+      const dayLogs = prev[date] || [];
       return {
         ...prev,
-        [todayStr]: todayLogs.filter(item => item.id !== foodItem.id)
+        [date]: dayLogs.filter(item => item.id !== foodItem.id)
       };
     });
   };
@@ -149,16 +149,28 @@ function App() {
     setCustomFoods(prev => [newFood, ...prev]);
   };
 
+  const handleSaveWeight = (date, w) => {
+    const parsedWeight = parseFloat(w);
+    if (!parsedWeight || parsedWeight <= 0) return;
+
+    setWeightLogs(prev => {
+      const filtered = prev.filter(item => item.date !== date);
+      return [...filtered, { date, weight: parsedWeight }].sort((a, b) => new Date(a.date) - new Date(b.date));
+    });
+  };
+
+  const handleDeleteWeight = (date) => {
+    if (window.confirm(`确认删除 ${date} 的体重记录吗？`)) {
+      setWeightLogs(prev => prev.filter(item => item.date !== date));
+    }
+  };
+
   const handleWeightSubmit = (e) => {
     e.preventDefault();
     const w = parseFloat(weightInput);
     if (!w || w <= 0) return;
 
-    setWeightLogs(prev => {
-      const filtered = prev.filter(item => item.date !== todayStr);
-      return [...filtered, { date: todayStr, weight: w }].sort((a,b) => new Date(a.date) - new Date(b.date));
-    });
-
+    handleSaveWeight(todayStr, w);
     setWeightInput('');
     alert('今日体重记录已更新！');
   };
@@ -209,12 +221,12 @@ function App() {
   };
 
   // PWA Photo Handlers
-  const handleSaveMealPhoto = (mealType, base64Image) => {
+  const handleSaveMealPhoto = (mealType, base64Image, date = todayStr) => {
     setMealPhotos(prev => {
-      const dayPhotos = prev[todayStr] || {};
+      const dayPhotos = prev[date] || {};
       return {
         ...prev,
-        [todayStr]: {
+        [date]: {
           ...dayPhotos,
           [mealType]: base64Image
         }
@@ -222,14 +234,14 @@ function App() {
     });
   };
 
-  const handleDeleteMealPhoto = (mealType) => {
+  const handleDeleteMealPhoto = (mealType, date = todayStr) => {
     setMealPhotos(prev => {
-      const dayPhotos = prev[todayStr] || {};
+      const dayPhotos = prev[date] || {};
       const newDayPhotos = { ...dayPhotos };
       delete newDayPhotos[mealType];
       return {
         ...prev,
-        [todayStr]: newDayPhotos
+        [date]: newDayPhotos
       };
     });
   };
@@ -304,13 +316,17 @@ function App() {
 
         {activeTab === 'diary' && (
           <DietLog 
-            todayLogs={todayLogs}
+            dietLogs={dietLogs}
+            weightLogs={weightLogs}
+            mealPhotos={mealPhotos}
             foodDatabase={fullFoodDatabase}
+            userProfile={userProfile}
             onLogFood={handleLogFood}
             onDeleteFood={handleDeleteFood}
-            mealPhotos={todayPhotos}
             onSaveMealPhoto={handleSaveMealPhoto}
             onDeleteMealPhoto={handleDeleteMealPhoto}
+            onSaveWeight={handleSaveWeight}
+            onDeleteWeight={handleDeleteWeight}
           />
         )}
 
@@ -369,6 +385,7 @@ function App() {
                     style={{ 
                       display: 'flex', 
                       justifyContent: 'space-between', 
+                      alignItems: 'center',
                       fontSize: '13px', 
                       padding: '10px 14px', 
                       background: 'rgba(255,255,255,0.02)', 
@@ -377,7 +394,15 @@ function App() {
                     }}
                   >
                     <span style={{ color: 'var(--text-secondary)' }}>{item.date}</span>
-                    <span style={{ fontWeight: 'bold' }}>{item.weight} kg</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <span style={{ fontWeight: 'bold' }}>{item.weight} kg</span>
+                      <button 
+                        onClick={() => handleDeleteWeight(item.date)}
+                        style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center' }}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>

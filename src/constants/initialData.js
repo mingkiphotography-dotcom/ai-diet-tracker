@@ -69,23 +69,7 @@ export const RECIPES = [
   }
 ];
 
-export const INITIAL_WEIGHTS = [
-  { date: '2026-06-02', weight: 75.8 },
-  { date: '2026-06-03', weight: 75.5 },
-  { date: '2026-06-04', weight: 75.4 },
-  { date: '2026-06-05', weight: 75.1 },
-  { date: '2026-06-06', weight: 74.9 },
-  { date: '2026-06-07', weight: 74.7 },
-  { date: '2026-06-08', weight: 74.5 }
-];
+export const INITIAL_WEIGHTS = [];
 
-export const INITIAL_DIET_LOGS = {
-  '2026-06-07': [
-    { name: '即食燕麦片', amount: 30, calories: 110, protein: 3.3, fat: 2.1, carb: 19.5, fiber: 3, mealType: 'breakfast' },
-    { name: '可生食鸡蛋', amount: 100, calories: 140, protein: 12.6, fat: 9.6, carb: 1, fiber: 0, mealType: 'breakfast' },
-    { name: '生鸡胸肉', amount: 150, calories: 177, protein: 36.9, fat: 2.9, carb: 0, fiber: 0, mealType: 'lunch' },
-    { name: '西蓝花', amount: 200, calories: 68, protein: 5.6, fat: 0.8, carb: 8.4, fiber: 5.2, mealType: 'lunch' },
-    { name: '老豆腐', amount: 150, calories: 168, protein: 17.3, fat: 11.3, carb: 3.8, fiber: 2.3, mealType: 'dinner' },
-    { name: '冷冻虾仁', amount: 100, calories: 48, protein: 10.4, fat: 0.7, carb: 0, fiber: 0, mealType: 'dinner' }
-  ]
-};
+export const INITIAL_DIET_LOGS = {};
+
