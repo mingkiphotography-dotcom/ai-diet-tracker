@@ -1,17 +1,22 @@
 import React, { useState } from 'react';
-import { User, Zap, PlusCircle, Check, Info } from 'lucide-react';
+import { User, Zap, PlusCircle, Check, Info, FileSpreadsheet, Import, Loader2, AlertCircle } from 'lucide-react';
+import { exportToCsv } from '../utils/helpers';
+import { importHistoryFromText } from '../utils/aiService';
 
 const Settings = ({ 
   userProfile, 
   onSaveProfile, 
   onAddCustomFood,
-  onClearData
+  onClearData,
+  weightLogs,
+  dietLogs,
+  onImportHistoryData
 }) => {
   const [apiKey, setApiKey] = useState(userProfile.apiKey || '');
-  const [targetCals, setTargetCals] = useState(String(userProfile.targetCalories || 2000));
-  const [targetProt, setTargetProt] = useState(String(userProfile.targetProtein || 120));
-  const [targetFat, setTargetFat] = useState(String(userProfile.targetFat || 50));
-  const [targetCarb, setTargetCarb] = useState(String(userProfile.targetCarb || 200));
+  const [targetCals, setTargetCals] = useState(String(userProfile.targetCalories || 1500));
+  const [targetProt, setTargetProt] = useState(String(userProfile.targetProtein || 136));
+  const [targetFat, setTargetFat] = useState(String(userProfile.targetFat || 45));
+  const [targetCarb, setTargetCarb] = useState(String(userProfile.targetCarb || 140));
 
   // BMR Calc state
   const [gender, setGender] = useState('male');
@@ -30,13 +35,19 @@ const Settings = ({
   const [foodFiber, setFoodFiber] = useState('');
   const [foodSuccess, setFoodSuccess] = useState(false);
 
+  // Import State
+  const [importText, setImportText] = useState('');
+  const [importLoading, setImportLoading] = useState(false);
+  const [importError, setImportError] = useState('');
+  const [importSuccessMsg, setImportSuccessMsg] = useState('');
+
   const handleSaveProfile = () => {
     onSaveProfile({
       apiKey: apiKey.trim(),
-      targetCalories: parseInt(targetCals) || 2000,
-      targetProtein: parseInt(targetProt) || 120,
-      targetFat: parseInt(targetFat) || 50,
-      targetCarb: parseInt(targetCarb) || 200
+      targetCalories: parseInt(targetCals) || 1500,
+      targetProtein: parseInt(targetProt) || 136,
+      targetFat: parseInt(targetFat) || 45,
+      targetCarb: parseInt(targetCarb) || 140
     });
     alert('设置已成功保存！');
   };
@@ -60,7 +71,7 @@ const Settings = ({
     const bmrRound = Math.round(bmr);
     const tdeeRound = Math.round(tdee);
     
-    // Suggest target: cut 300-500 kcal for weight loss
+    // Suggest target: cut 350 kcal for weight loss
     const suggestCals = Math.round(tdeeRound - 350);
 
     setBmrResult({
@@ -110,6 +121,38 @@ const Settings = ({
     
     setFoodSuccess(true);
     setTimeout(() => setFoodSuccess(false), 2000);
+  };
+
+  const handleImportHistory = async () => {
+    if (!importText.trim()) return;
+    if (!apiKey) {
+      setImportError('使用 AI 解析导入前请先配置并保存 Gemini API Key');
+      return;
+    }
+
+    setImportLoading(true);
+    setImportError('');
+    setImportSuccessMsg('');
+
+    try {
+      const parsedData = await importHistoryFromText(importText, apiKey);
+      
+      if (parsedData.weights.length === 0 && parsedData.dietLogs.length === 0) {
+        throw new Error('AI 未能从文本中识别出任何有效的体重或饮食记录，请核对输入。');
+      }
+
+      onImportHistoryData(parsedData);
+      setImportSuccessMsg(`成功导入 ${parsedData.weights.length} 条体重记录和 ${parsedData.dietLogs.length} 条饮食日志！`);
+      setImportText('');
+    } catch (err) {
+      setImportError(err.message || 'AI 解析导入失败，请稍后重试');
+    } finally {
+      setImportLoading(false);
+    }
+  };
+
+  const handleExportData = () => {
+    exportToCsv(dietLogs, weightLogs, userProfile);
   };
 
   return (
@@ -179,7 +222,77 @@ const Settings = ({
         </button>
       </div>
 
-      {/* 2. BMR/TDEE Calculator */}
+      {/* 2. NEW: Data Management (薄荷数据导入 & CSV 导出) */}
+      <div className="glass-card">
+        <h4 style={{ fontSize: '15px', fontWeight: '800', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <FileSpreadsheet size={16} style={{ color: 'var(--color-primary)' }} /> 数据导入与导出
+        </h4>
+
+        {/* Export CSV Section */}
+        <div style={{ marginBottom: '20px', paddingBottom: '16px', borderBottom: '1px solid var(--card-border)' }}>
+          <label className="form-label" style={{ marginBottom: '8px', display: 'block' }}>历史减脂数据备份</label>
+          <button 
+            type="button" 
+            className="btn-secondary" 
+            onClick={handleExportData}
+            style={{ width: '100%', display: 'flex', justifyContent: 'center', gap: '8px' }}
+          >
+            <FileSpreadsheet size={16} /> 导出减脂数据至 CSV 文件 (Excel)
+          </button>
+        </div>
+
+        {/* Import from Boohee Health */}
+        <div>
+          <label className="form-label" style={{ display: 'block' }}>薄荷健康历史数据一键导入（AI 智能解析）</label>
+          <p style={{ fontSize: '10px', color: 'var(--text-secondary)', margin: '4px 0 10px' }}>
+            直接把从薄荷健康中记录的历史数据复制，或手写简短日志（如“6月1号体重75kg，中午吃了鸡蛋燕麦；6.2号体重74.8...”）粘贴在下面，AI 将自动结构化并同步。
+          </p>
+
+          <textarea
+            value={importText}
+            onChange={(e) => setImportText(e.target.value)}
+            className="form-input"
+            placeholder="例如：&#10;“6月10日：体重 74.3kg，吃了两个煮鸡蛋，一碗西蓝花。&#10;6月11日：体重 74.1kg，吃了鸡胸肉配糙米饭”"
+            style={{ height: '90px', resize: 'none', fontSize: '12px' }}
+            disabled={importLoading}
+          />
+
+          {importError && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#ff6b6b', fontSize: '11px', marginTop: '10px', background: 'rgba(255,107,107,0.06)', padding: '8px 12px', borderRadius: '8px' }}>
+              <AlertCircle size={14} />
+              <span>{importError}</span>
+            </div>
+          )}
+
+          {importSuccessMsg && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#10b981', fontSize: '11px', marginTop: '10px', background: 'rgba(16,185,129,0.06)', padding: '8px 12px', borderRadius: '8px' }}>
+              <Check size={14} />
+              <span>{importSuccessMsg}</span>
+            </div>
+          )}
+
+          <button 
+            type="button" 
+            className="btn-primary" 
+            style={{ width: '100%', marginTop: '12px' }}
+            onClick={handleImportHistory}
+            disabled={importLoading || !importText.trim()}
+          >
+            {importLoading ? (
+              <>
+                <Loader2 size={16} className="spin" />
+                AI 正在努力提取整理你的历史账单...
+              </>
+            ) : (
+              <>
+                <Import size={16} /> 一键分析合并历史数据
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+
+      {/* 3. BMR/TDEE Calculator */}
       <div className="glass-card">
         <h4 style={{ fontSize: '15px', fontWeight: '800', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
           <User size={16} style={{ color: 'var(--color-primary)' }} /> 科学代谢计算器 (BMR / TDEE)
@@ -282,7 +395,7 @@ const Settings = ({
         )}
       </div>
 
-      {/* 3. Custom Food Creator */}
+      {/* 4. Custom Food Creator */}
       <div className="glass-card">
         <h4 style={{ fontSize: '15px', fontWeight: '800', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
           <PlusCircle size={16} style={{ color: 'var(--color-fat)' }} /> 添加自定义食物
@@ -361,7 +474,7 @@ const Settings = ({
         </form>
       </div>
 
-      {/* 4. Danger Zone */}
+      {/* 5. Danger Zone */}
       <div className="glass-card" style={{ borderColor: 'rgba(239,68,68,0.2)', background: 'rgba(239,68,68,0.02)' }}>
         <h4 style={{ fontSize: '15px', fontWeight: '800', marginBottom: '8px', color: '#ef4444' }}>危险区域</h4>
         <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '16px' }}>

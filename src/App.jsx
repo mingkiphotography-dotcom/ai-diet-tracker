@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Flame, Utensils, BookOpen, Scale, User, 
-  Sparkles, Check, Info, AlertCircle 
+  Flame, Utensils, Sparkles, Scale, User, 
+  Check, Info, AlertCircle 
 } from 'lucide-react';
 
 // Subcomponents
 import Dashboard from './components/Dashboard';
 import DietLog from './components/DietLog';
-import RecipeList from './components/RecipeList';
+import AiComposer from './components/AiComposer';
 import WeightChart from './components/WeightChart';
 import Settings from './components/Settings';
 import AiLogModal from './components/AiLogModal';
@@ -38,10 +38,10 @@ function App() {
   const [userProfile, setUserProfile] = useState(() => {
     const defaultProfile = {
       apiKey: '',
-      targetCalories: 2000,
-      targetProtein: 120,
-      targetFat: 50,
-      targetCarb: 200,
+      targetCalories: 1500, // Updated target base
+      targetProtein: 136,   // Updated target base
+      targetFat: 45,        // Updated target base
+      targetCarb: 140,      // Updated target base
       targetExercise: 300
     };
     const saved = safeJsonParse(safeStorage.getItem('ai_diet_profile'), defaultProfile);
@@ -63,9 +63,20 @@ function App() {
     return saved ? safeJsonParse(saved, []) : INITIAL_WEIGHTS;
   });
 
+  // PWA Photo logging states
+  const [mealPhotos, setMealPhotos] = useState(() => {
+    return safeJsonParse(safeStorage.getItem('ai_diet_photos'), {});
+  });
+
+  // AI progress report diagnosis persistence
+  const [diagnosisResult, setDiagnosisResult] = useState(() => {
+    return safeJsonParse(safeStorage.getItem('ai_diet_diagnosis'), null);
+  });
+
   // Today's context
   const todayStr = getTodayDateString();
   const todayLogs = dietLogs[todayStr] || [];
+  const todayPhotos = mealPhotos[todayStr] || {};
 
   // Active Food Database (Built-in + Custom)
   const fullFoodDatabase = [...FOOD_DATABASE, ...customFoods];
@@ -93,6 +104,14 @@ function App() {
   useEffect(() => {
     safeStorage.setItem('ai_diet_weights', JSON.stringify(weightLogs));
   }, [weightLogs]);
+
+  useEffect(() => {
+    safeStorage.setItem('ai_diet_photos', JSON.stringify(mealPhotos));
+  }, [mealPhotos]);
+
+  useEffect(() => {
+    safeStorage.setItem('ai_diet_diagnosis', JSON.stringify(diagnosisResult));
+  }, [diagnosisResult]);
 
   useEffect(() => {
     safeStorage.setItem('ai_diet_api_key', apiKey);
@@ -126,10 +145,6 @@ function App() {
     });
   };
 
-  const handleUpdateFoodAmount = (foodItem, index, newAmount) => {
-    // optional helper
-  };
-
   const handleAddCustomFood = (newFood) => {
     setCustomFoods(prev => [newFood, ...prev]);
   };
@@ -139,7 +154,6 @@ function App() {
     const w = parseFloat(weightInput);
     if (!w || w <= 0) return;
 
-    // Check if we already logged weight today, update it; otherwise add new
     setWeightLogs(prev => {
       const filtered = prev.filter(item => item.date !== todayStr);
       return [...filtered, { date: todayStr, weight: w }].sort((a,b) => new Date(a.date) - new Date(b.date));
@@ -160,19 +174,23 @@ function App() {
     safeStorage.setItem('ai_diet_custom_foods', '');
     safeStorage.setItem('ai_diet_logs', '');
     safeStorage.setItem('ai_diet_weights', '');
+    safeStorage.setItem('ai_diet_photos', '');
+    safeStorage.setItem('ai_diet_diagnosis', '');
     
     setApiKey('');
     setUserProfile({
       apiKey: '',
-      targetCalories: 2000,
-      targetProtein: 120,
-      targetFat: 50,
-      targetCarb: 200,
+      targetCalories: 1500,
+      targetProtein: 136,
+      targetFat: 45,
+      targetCarb: 140,
       targetExercise: 300
     });
     setCustomFoods([]);
     setDietLogs({});
     setWeightLogs([]);
+    setMealPhotos({});
+    setDiagnosisResult(null);
     setActiveTab('dashboard');
     alert('本地数据已全部清空，恢复初始状态！');
   };
@@ -187,8 +205,73 @@ function App() {
     loggedItems.forEach(item => {
       handleLogFood(item);
     });
-    // Redirect to Diary page so user can check
     setActiveTab('diary');
+  };
+
+  // PWA Photo Handlers
+  const handleSaveMealPhoto = (mealType, base64Image) => {
+    setMealPhotos(prev => {
+      const dayPhotos = prev[todayStr] || {};
+      return {
+        ...prev,
+        [todayStr]: {
+          ...dayPhotos,
+          [mealType]: base64Image
+        }
+      };
+    });
+  };
+
+  const handleDeleteMealPhoto = (mealType) => {
+    setMealPhotos(prev => {
+      const dayPhotos = prev[todayStr] || {};
+      const newDayPhotos = { ...dayPhotos };
+      delete newDayPhotos[mealType];
+      return {
+        ...prev,
+        [todayStr]: newDayPhotos
+      };
+    });
+  };
+
+  // Boohee Health Import Data Merger
+  const handleImportHistoryData = (parsedData) => {
+    // 1. Merge Weights (dates are unique)
+    setWeightLogs(prev => {
+      const weightMap = new Map(prev.map(item => [item.date, item.weight]));
+      parsedData.weights.forEach(w => {
+        weightMap.set(w.date, w.weight);
+      });
+      return Array.from(weightMap.entries())
+        .map(([date, weight]) => ({ date, weight }))
+        .sort((a, b) => new Date(a.date) - new Date(b.date));
+    });
+
+    // 2. Merge Diet Logs (dates are keys in object)
+    setDietLogs(prev => {
+      const updatedLogs = { ...prev };
+      
+      // Group the parsed list of dietLogs by date
+      const groupedImports = parsedData.dietLogs.reduce((acc, item) => {
+        const { date, ...food } = item;
+        const logFood = {
+          ...food,
+          id: generateId(),
+          timestamp: Date.now()
+        };
+        if (!acc[date]) acc[date] = [];
+        acc[date].push(logFood);
+        return acc;
+      }, {});
+
+      // Merge grouped imports into existing logs
+      Object.keys(groupedImports).forEach(date => {
+        const existing = updatedLogs[date] || [];
+        updatedLogs[date] = [...existing, ...groupedImports[date]];
+      });
+
+      return updatedLogs;
+    });
   };
 
   return (
@@ -225,14 +308,19 @@ function App() {
             foodDatabase={fullFoodDatabase}
             onLogFood={handleLogFood}
             onDeleteFood={handleDeleteFood}
+            mealPhotos={todayPhotos}
+            onSaveMealPhoto={handleSaveMealPhoto}
+            onDeleteMealPhoto={handleDeleteMealPhoto}
           />
         )}
 
-        {activeTab === 'recipes' && (
-          <RecipeList 
-            recipes={RECIPES}
+        {activeTab === 'composer' && (
+          <AiComposer 
             foodDatabase={fullFoodDatabase}
+            todayLogs={todayLogs}
+            userProfile={userProfile}
             onLogFood={handleLogFood}
+            setActiveTab={setActiveTab}
           />
         )}
 
@@ -243,8 +331,14 @@ function App() {
             </h3>
 
             <div className="glass-card">
-              <h4 style={{ fontSize: '15px', fontWeight: '800', marginBottom: '12px' }}>体重变化趋势</h4>
-              <WeightChart data={weightLogs} />
+              <h4 style={{ fontSize: '15px', fontWeight: '800', marginBottom: '12px' }}>体重与减脂趋势</h4>
+              <WeightChart 
+                data={weightLogs} 
+                dietLogs={dietLogs}
+                userProfile={userProfile}
+                diagnosisResult={diagnosisResult}
+                setDiagnosisResult={setDiagnosisResult}
+              />
             </div>
 
             <div className="glass-card">
@@ -297,6 +391,9 @@ function App() {
             onSaveProfile={handleSaveProfile}
             onAddCustomFood={handleAddCustomFood}
             onClearData={handleClearData}
+            weightLogs={weightLogs}
+            dietLogs={dietLogs}
+            onImportHistoryData={handleImportHistoryData}
           />
         )}
       </main>
@@ -318,11 +415,11 @@ function App() {
           <span>日志</span>
         </button>
         <button 
-          className={`nav-item ${activeTab === 'recipes' ? 'active' : ''}`}
-          onClick={() => setActiveTab('recipes')}
+          className={`nav-item ${activeTab === 'composer' ? 'active' : ''}`}
+          onClick={() => setActiveTab('composer')}
         >
-          <BookOpen size={20} />
-          <span>食谱</span>
+          <Sparkles size={20} />
+          <span>配餐</span>
         </button>
         <button 
           className={`nav-item ${activeTab === 'weight' ? 'active' : ''}`}
