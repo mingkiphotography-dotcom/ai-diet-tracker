@@ -262,7 +262,7 @@ const DietLog = ({
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: '12px' }}>
         <button 
           className="btn-secondary" 
-          style={{ padding: '8px 10px', minWidth: 'unset', display: 'flex', alignItems: 'center', margin: 0 }} 
+          style={{ width: '36px', height: '36px', padding: 0, minWidth: 'unset', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: 0, flexShrink: 0 }} 
           onClick={handlePrevDay}
         >
           <ChevronLeft size={16} />
@@ -288,7 +288,9 @@ const DietLog = ({
             justifyContent: 'center',
             gap: '6px',
             userSelect: 'none',
-            transition: 'border-color 0.2s ease'
+            transition: 'border-color 0.2s ease',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden'
           }} 
         >
           <span>📅 {selectedDate}</span>
@@ -297,7 +299,7 @@ const DietLog = ({
         
         <button 
           className="btn-secondary" 
-          style={{ padding: '8px 10px', minWidth: 'unset', display: 'flex', alignItems: 'center', margin: 0 }} 
+          style={{ width: '36px', height: '36px', padding: 0, minWidth: 'unset', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: 0, flexShrink: 0 }} 
           onClick={handleNextDay}
         >
           <ChevronRight size={16} />
@@ -311,17 +313,17 @@ const DietLog = ({
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
             <button 
               className="btn-secondary" 
-              style={{ padding: '4px 8px', minWidth: 'unset', margin: 0 }} 
+              style={{ width: '32px', height: '32px', padding: 0, minWidth: 'unset', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: 0, flexShrink: 0 }} 
               onClick={handlePrevMonth}
             >
               <ChevronLeft size={14} />
             </button>
-            <span style={{ fontSize: '13px', fontWeight: 'bold', color: 'var(--text-primary)' }}>
+            <span style={{ fontSize: '13px', fontWeight: 'bold', color: 'var(--text-primary)', whiteSpace: 'nowrap' }}>
               {calendarMonth.getFullYear()}年{calendarMonth.getMonth() + 1}月
             </span>
             <button 
               className="btn-secondary" 
-              style={{ padding: '4px 8px', minWidth: 'unset', margin: 0 }} 
+              style={{ width: '32px', height: '32px', padding: 0, minWidth: 'unset', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: 0, flexShrink: 0 }} 
               onClick={handleNextMonth}
             >
               <ChevronRight size={14} />

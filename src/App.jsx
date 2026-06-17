@@ -5,7 +5,6 @@ import {
 } from 'lucide-react';
 
 // Subcomponents
-import Dashboard from './components/Dashboard';
 import DietLog from './components/DietLog';
 import AiComposer from './components/AiComposer';
 import WeightChart from './components/WeightChart';
@@ -28,7 +27,7 @@ import {
 import { queryGeminiForDiet } from './utils/aiService';
 
 function App() {
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const [activeTab, setActiveTab] = useState('diary');
   
   // 1. Local Storage Hydration
   const [apiKey, setApiKey] = useState(() => {
@@ -255,7 +254,7 @@ function App() {
     setDiagnosisResult(null);
     setBurnedLogs({});
     setSleepLogs({});
-    setActiveTab('dashboard');
+    setActiveTab('diary');
     alert('本地数据已全部清空，恢复初始状态！');
   };
 
@@ -359,19 +358,6 @@ function App() {
 
       {/* Main Content Area */}
       <main className="app-content">
-        {activeTab === 'dashboard' && (
-          <Dashboard 
-            todayLogs={todayLogs}
-            userProfile={userProfile}
-            todayBurned={burnedLogs[todayStr] !== undefined ? burnedLogs[todayStr] : 0}
-            onQueryAi={handleQueryAi}
-            onAiSuccess={(data) => {
-              setAiParsedResult(data);
-              setAiLogTargetDate(todayStr);
-              setIsAiModalOpen(true);
-            }}
-          />
-        )}
 
         {activeTab === 'diary' && (
           <DietLog 
@@ -500,13 +486,6 @@ function App() {
 
       {/* Sticky Bottom Tab Bar */}
       <nav className="nav-bar">
-        <button 
-          className={`nav-item ${activeTab === 'dashboard' ? 'active' : ''}`}
-          onClick={() => setActiveTab('dashboard')}
-        >
-          <Flame size={20} />
-          <span>主页</span>
-        </button>
         <button 
           className={`nav-item ${activeTab === 'diary' ? 'active' : ''}`}
           onClick={() => setActiveTab('diary')}
