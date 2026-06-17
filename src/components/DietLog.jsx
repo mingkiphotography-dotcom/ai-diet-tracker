@@ -487,19 +487,89 @@ const DietLog = ({
           <div style={{ height: '100%', width: `${Math.min(100, (eatenStats.calories / targetCals) * 100)}%`, background: eatenStats.calories > targetCals ? '#ef4444' : 'var(--color-primary)', borderRadius: '3px' }}></div>
         </div>
 
-        {/* Macros Table */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', fontSize: '12px', borderBottom: '1px solid rgba(0,0,0,0.03)', paddingBottom: '12px' }}>
-          <div style={{ flex: 1, textAlign: 'center' }}>
-            <div style={{ color: 'var(--text-secondary)', marginBottom: '4px' }}>碳水</div>
-            <div style={{ fontWeight: 'bold', color: 'var(--text-primary)' }}>{Math.round(eatenStats.carb)}g / {targetCarb}g</div>
+        {/* Apple-style Concentric Activity Rings & Details */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '20px', padding: '4px 0 16px', borderBottom: '1px solid rgba(0,0,0,0.03)' }}>
+          {/* Concentric Rings SVG */}
+          <div style={{ position: 'relative', width: '100px', height: '100px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <svg width="100" height="100" viewBox="0 0 100 100">
+              {/* Outer Ring Background (Carbs) */}
+              <circle cx="50" cy="50" r="40" stroke="#38bdf8" strokeWidth="7" fill="none" opacity="0.12" />
+              {/* Middle Ring Background (Protein) */}
+              <circle cx="50" cy="50" r="30" stroke="#a855f7" strokeWidth="7" fill="none" opacity="0.12" />
+              {/* Inner Ring Background (Fat) */}
+              <circle cx="50" cy="50" r="20" stroke="#fb923c" strokeWidth="7" fill="none" opacity="0.12" />
+              
+              {/* Outer Ring Active (Carbs) */}
+              <circle 
+                cx="50" 
+                cy="50" 
+                r="40" 
+                stroke="#38bdf8" 
+                strokeWidth="7" 
+                fill="none" 
+                strokeLinecap="round" 
+                strokeDasharray="251.3" 
+                strokeDashoffset={251.3 - (Math.min(1, eatenStats.carb / (targetCarb || 1)) * 251.3)} 
+                transform="rotate(-90 50 50)" 
+                style={{ transition: 'stroke-dashoffset 0.3s ease' }}
+              />
+              {/* Middle Ring Active (Protein) */}
+              <circle 
+                cx="50" 
+                cy="50" 
+                r="30" 
+                stroke="#a855f7" 
+                strokeWidth="7" 
+                fill="none" 
+                strokeLinecap="round" 
+                strokeDasharray="188.5" 
+                strokeDashoffset={188.5 - (Math.min(1, eatenStats.protein / (targetProtein || 1)) * 188.5)} 
+                transform="rotate(-90 50 50)" 
+                style={{ transition: 'stroke-dashoffset 0.3s ease' }}
+              />
+              {/* Inner Ring Active (Fat) */}
+              <circle 
+                cx="50" 
+                cy="50" 
+                r="20" 
+                stroke="#fb923c" 
+                strokeWidth="7" 
+                fill="none" 
+                strokeLinecap="round" 
+                strokeDasharray="125.7" 
+                strokeDashoffset={125.7 - (Math.min(1, eatenStats.fat / (targetFat || 1)) * 125.7)} 
+                transform="rotate(-90 50 50)" 
+                style={{ transition: 'stroke-dashoffset 0.3s ease' }}
+              />
+            </svg>
           </div>
-          <div style={{ flex: 1, textAlign: 'center' }}>
-            <div style={{ color: 'var(--text-secondary)', marginBottom: '4px' }}>蛋白</div>
-            <div style={{ fontWeight: 'bold', color: 'var(--text-primary)' }}>{Math.round(eatenStats.protein)}g / {targetProtein}g</div>
-          </div>
-          <div style={{ flex: 1, textAlign: 'center' }}>
-            <div style={{ color: 'var(--text-secondary)', marginBottom: '4px' }}>脂肪</div>
-            <div style={{ fontWeight: 'bold', color: 'var(--text-primary)' }}>{Math.round(eatenStats.fat)}g / {targetFat}g</div>
+          
+          {/* Macros Detail List */}
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {/* Carb */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: '#38bdf8' }}></span>
+                <span style={{ color: 'var(--text-secondary)' }}>碳水</span>
+              </div>
+              <span style={{ fontWeight: 'bold', color: 'var(--text-primary)' }}>{Math.round(eatenStats.carb)}g / {targetCarb}g</span>
+            </div>
+            {/* Protein */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: '#a855f7' }}></span>
+                <span style={{ color: 'var(--text-secondary)' }}>蛋白</span>
+              </div>
+              <span style={{ fontWeight: 'bold', color: 'var(--text-primary)' }}>{Math.round(eatenStats.protein)}g / {targetProtein}g</span>
+            </div>
+            {/* Fat */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: '#fb923c' }}></span>
+                <span style={{ color: 'var(--text-secondary)' }}>脂肪</span>
+              </div>
+              <span style={{ fontWeight: 'bold', color: 'var(--text-primary)' }}>{Math.round(eatenStats.fat)}g / {targetFat}g</span>
+            </div>
           </div>
         </div>
 
