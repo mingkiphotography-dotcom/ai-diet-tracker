@@ -25,6 +25,7 @@ import {
   INITIAL_DIET_LOGS 
 } from './constants/initialData';
 import { queryGeminiForDiet } from './utils/aiService';
+import { IMPORTED_HISTORY } from './constants/importedHistory';
 
 function App() {
   const [activeTab, setActiveTab] = useState('diary');
@@ -114,6 +115,67 @@ function App() {
   const [weightInput, setWeightInput] = useState('');
 
   // 2. Local Storage Syncing
+  // One-time auto-migration for parsed health history v1.3.5
+  useEffect(() => {
+    const migrated = safeStorage.getItem('history_imported_v135');
+    if (!migrated && IMPORTED_HISTORY) {
+      console.log("Auto-migrating parsed health history...");
+      
+      // 1. Merge weights
+      setWeightLogs(prev => {
+        const weightMap = new Map(prev.map(item => [item.date, item.weight]));
+        IMPORTED_HISTORY.weights.forEach(w => {
+          if (w && w.date && w.weight > 0) {
+            weightMap.set(w.date, w.weight);
+          }
+        });
+        return Array.from(weightMap.entries())
+          .map(([date, weight]) => ({ date, weight }))
+          .sort((a, b) => new Date(a.date) - new Date(b.date));
+      });
+
+      // 2. Merge sleep
+      setSleepLogs(prev => {
+        return {
+          ...prev,
+          ...IMPORTED_HISTORY.sleep
+        };
+      });
+
+      // 3. Merge burned
+      setBurnedLogs(prev => {
+        return {
+          ...prev,
+          ...IMPORTED_HISTORY.burned
+        };
+      });
+
+      // 4. Merge diet logs
+      setDietLogs(prev => {
+        const updated = { ...prev };
+        Object.keys(IMPORTED_HISTORY.dietLogs).forEach(date => {
+          const existing = updated[date] || [];
+          const hasImported = existing.some(item => item.name === '健康数据导入');
+          if (!hasImported) {
+            const imports = IMPORTED_HISTORY.dietLogs[date].map(item => ({
+              ...item,
+              id: 'imported_' + Math.random().toString(36).substring(2, 9),
+              timestamp: Date.now()
+            }));
+            updated[date] = [...existing, ...imports];
+          }
+        });
+        return updated;
+      });
+
+      safeStorage.setItem('history_imported_v135', 'true');
+      
+      setTimeout(() => {
+        alert("🎉 历史数据已自动同步导入成功！包含 5 月 30 日至今的体重、睡眠、运动消耗及饮食日记，请刷新页面查看！");
+      }, 500);
+    }
+  }, []);
+
   useEffect(() => {
     safeStorage.setItem('ai_diet_profile', JSON.stringify(userProfile));
   }, [userProfile]);
