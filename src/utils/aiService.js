@@ -7,6 +7,30 @@ const ensureArray = (val) => {
   return [];
 };
 
+// Helper for extracting numbers from potentially varying key names
+const getFuzzyNumber = (obj, keys, defaultVal = 0) => {
+  if (!obj || typeof obj !== 'object') return defaultVal;
+  for (const k of keys) {
+    if (obj[k] !== undefined && obj[k] !== null) {
+      const val = obj[k];
+      if (typeof val === 'number') return val;
+      if (typeof val === 'string' && !isNaN(parseFloat(val))) return parseFloat(val);
+    }
+  }
+  return defaultVal;
+};
+
+// Helper for extracting strings from potentially varying key names
+const getFuzzyString = (obj, keys, defaultVal = '') => {
+  if (!obj || typeof obj !== 'object') return defaultVal;
+  for (const k of keys) {
+    if (obj[k] !== undefined && obj[k] !== null) {
+      return String(obj[k]);
+    }
+  }
+  return defaultVal;
+};
+
 // Helper to retrieve full AI configuration from localStorage
 const getAiConfig = (explicitApiKey) => {
   try {
@@ -182,24 +206,36 @@ ${foodDbList}
 
   // Fuzzy mapping for queryGeminiForDiet
   const rawItems = parsed?.items || parsed?.foods || parsed?.foodList || parsed?.food_list || [];
-  const normalizedItems = ensureArray(rawItems).map(item => ({
-    foodName: item.foodName || item.name || item.food || '未知食物',
-    amount: typeof item.amount === 'number' ? item.amount : (typeof item.quantity === 'number' ? item.quantity : (typeof item.weight === 'number' ? item.weight : 100)),
-    calories: typeof item.calories === 'number' ? item.calories : (typeof item.caloriesVal === 'number' ? item.caloriesVal : 0),
-    protein: typeof item.protein === 'number' ? item.protein : (typeof item.proteinVal === 'number' ? item.proteinVal : 0),
-    fat: typeof item.fat === 'number' ? item.fat : (typeof item.fatVal === 'number' ? item.fatVal : 0),
-    carb: typeof item.carb === 'number' ? item.carb : (typeof item.carbohydrate === 'number' ? item.carbohydrate : 0),
-    fiber: typeof item.fiber === 'number' ? item.fiber : 0,
-    mealType: item.mealType || item.meal_type || 'lunch',
-    isEstimated: typeof item.isEstimated === 'boolean' ? item.isEstimated : true
-  }));
+  const normalizedItems = ensureArray(rawItems).map(item => {
+    const name = getFuzzyString(item, ['foodName', 'name', 'food', 'food_name'], '未知食物');
+    const amount = getFuzzyNumber(item, ['grams', 'amount', 'weight', 'quantity_g', 'quantity_ml', 'weight_g', 'quantity'], 100);
+    const calories = getFuzzyNumber(item, ['calories', 'estimatedCalories', 'calorie', 'caloriesVal', 'energy', 'kcal'], 0);
+    const protein = getFuzzyNumber(item, ['protein', 'estimatedProtein', 'proteinVal', 'proteins'], 0);
+    const fat = getFuzzyNumber(item, ['fat', 'estimatedFat', 'fatVal', 'fats'], 0);
+    const carb = getFuzzyNumber(item, ['carb', 'carbs', 'estimatedCarbs', 'carbohydrate', 'carbohydrates'], 0);
+    const fiber = getFuzzyNumber(item, ['fiber', 'estimatedFiber', 'fiberVal', 'fibers', 'dietaryFiber'], 0);
+    const mealType = getFuzzyString(item, ['mealType', 'meal_type'], 'lunch');
+    const isEstimated = typeof item.isEstimated === 'boolean' ? item.isEstimated : true;
+
+    return {
+      foodName: name,
+      amount,
+      calories,
+      protein,
+      fat,
+      carb,
+      fiber,
+      mealType,
+      isEstimated
+    };
+  });
 
   return {
     items: normalizedItems,
-    totalCalories: typeof parsed?.totalCalories === 'number' ? parsed.totalCalories : (typeof parsed?.total_calories === 'number' ? parsed.total_calories : normalizedItems.reduce((sum, f) => sum + f.calories, 0)),
-    dietSummary: parsed?.dietSummary || parsed?.diet_summary || parsed?.summary || '分析完成',
-    date: parsed?.date || '',
-    weight: typeof parsed?.weight === 'number' ? parsed.weight : null
+    totalCalories: getFuzzyNumber(parsed, ['totalCalories', 'total_calories', 'calories'], normalizedItems.reduce((sum, f) => sum + f.calories, 0)),
+    dietSummary: getFuzzyString(parsed, ['dietSummary', 'diet_summary', 'summary'], '分析完成'),
+    date: getFuzzyString(parsed, ['date'], ''),
+    weight: parsed?.weight !== undefined && parsed?.weight !== null ? parseFloat(parsed.weight) || null : null
   };
 };
 
@@ -282,21 +318,32 @@ export const importHistoryFromText = async (rawText, apiKey) => {
   const rawDietLogs = parsed?.dietLogs || parsed?.dietLog || parsed?.diets || parsed?.diet_logs || parsed?.dietRecords || parsed?.diet_records || [];
 
   const normalizedWeights = ensureArray(rawWeights).map(item => ({
-    date: item.date || '',
-    weight: typeof item.weight === 'number' ? item.weight : (typeof item.weightVal === 'number' ? item.weightVal : 0)
+    date: getFuzzyString(item, ['date'], ''),
+    weight: getFuzzyNumber(item, ['weight', 'weightVal', 'value'], 0)
   })).filter(item => item.date && item.weight > 0);
 
-  const normalizedDietLogs = ensureArray(rawDietLogs).map(item => ({
-    date: item.date || '',
-    name: item.name || item.foodName || item.food || '未知食物',
-    amount: typeof item.amount === 'number' ? item.amount : (typeof item.quantity === 'number' ? item.quantity : (typeof item.weight === 'number' ? item.weight : 100)),
-    calories: typeof item.calories === 'number' ? item.calories : (typeof item.caloriesVal === 'number' ? item.caloriesVal : 0),
-    protein: typeof item.protein === 'number' ? item.protein : (typeof item.proteinVal === 'number' ? item.proteinVal : 0),
-    fat: typeof item.fat === 'number' ? item.fat : (typeof item.fatVal === 'number' ? item.fatVal : 0),
-    carb: typeof item.carb === 'number' ? item.carb : (typeof item.carbohydrate === 'number' ? item.carbohydrate : 0),
-    fiber: typeof item.fiber === 'number' ? item.fiber : 0,
-    mealType: item.mealType || item.meal_type || 'lunch'
-  })).filter(item => item.date && item.name);
+  const normalizedDietLogs = ensureArray(rawDietLogs).map(item => {
+    const name = getFuzzyString(item, ['name', 'foodName', 'food', 'food_name'], '未知食物');
+    const amount = getFuzzyNumber(item, ['grams', 'amount', 'weight', 'quantity_g', 'quantity_ml', 'weight_g', 'quantity'], 100);
+    const calories = getFuzzyNumber(item, ['calories', 'estimatedCalories', 'calorie', 'caloriesVal', 'energy', 'kcal'], 0);
+    const protein = getFuzzyNumber(item, ['protein', 'estimatedProtein', 'proteinVal', 'proteins'], 0);
+    const fat = getFuzzyNumber(item, ['fat', 'estimatedFat', 'fatVal', 'fats'], 0);
+    const carb = getFuzzyNumber(item, ['carb', 'carbs', 'estimatedCarbs', 'carbohydrate', 'carbohydrates'], 0);
+    const fiber = getFuzzyNumber(item, ['fiber', 'estimatedFiber', 'fiberVal', 'fibers', 'dietaryFiber'], 0);
+    const mealType = getFuzzyString(item, ['mealType', 'meal_type'], 'lunch');
+
+    return {
+      date: getFuzzyString(item, ['date'], ''),
+      name,
+      amount,
+      calories,
+      protein,
+      fat,
+      carb,
+      fiber,
+      mealType
+    };
+  }).filter(item => item.date && item.name);
 
   return {
     weights: normalizedWeights,
@@ -398,15 +445,25 @@ ${foodList}
 
   // Fuzzy mapping for generateSmartMeal
   const rawIngredients = parsed?.ingredients || parsed?.foods || parsed?.items || [];
-  const normalizedIngredients = ensureArray(rawIngredients).map(item => ({
-    foodName: item.foodName || item.name || item.food || '未知食物',
-    amount: typeof item.amount === 'number' ? item.amount : (typeof item.quantity === 'number' ? item.quantity : (typeof item.weight === 'number' ? item.weight : 100)),
-    calories: typeof item.calories === 'number' ? item.calories : 0,
-    protein: typeof item.protein === 'number' ? item.protein : 0,
-    fat: typeof item.fat === 'number' ? item.fat : 0,
-    carb: typeof item.carb === 'number' ? item.carb : (typeof item.carbohydrate === 'number' ? item.carbohydrate : 0),
-    fiber: typeof item.fiber === 'number' ? item.fiber : 0
-  }));
+  const normalizedIngredients = ensureArray(rawIngredients).map(item => {
+    const name = getFuzzyString(item, ['foodName', 'name', 'food', 'food_name'], '未知食物');
+    const amount = getFuzzyNumber(item, ['grams', 'amount', 'weight', 'quantity_g', 'quantity_ml', 'weight_g', 'quantity'], 100);
+    const calories = getFuzzyNumber(item, ['calories', 'estimatedCalories', 'calorie', 'caloriesVal', 'energy', 'kcal'], 0);
+    const protein = getFuzzyNumber(item, ['protein', 'estimatedProtein', 'proteinVal', 'proteins'], 0);
+    const fat = getFuzzyNumber(item, ['fat', 'estimatedFat', 'fatVal', 'fats'], 0);
+    const carb = getFuzzyNumber(item, ['carb', 'carbs', 'estimatedCarbs', 'carbohydrate', 'carbohydrates'], 0);
+    const fiber = getFuzzyNumber(item, ['fiber', 'estimatedFiber', 'fiberVal', 'fibers', 'dietaryFiber'], 0);
+
+    return {
+      foodName: name,
+      amount,
+      calories,
+      protein,
+      fat,
+      carb,
+      fiber
+    };
+  });
 
   const recipeName = parsed?.recipeName || parsed?.recipe_name || parsed?.name || 'AI智能推荐减脂餐';
   const totalNutrients = parsed?.totalNutrients || parsed?.total_nutrients || { calories: 0, carb: 0, protein: 0, fat: 0 };
