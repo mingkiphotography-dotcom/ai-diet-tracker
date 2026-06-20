@@ -318,11 +318,17 @@ function App() {
 
   // Boohee Health Import Data Merger
   const handleImportHistoryData = (parsedData) => {
+    if (!parsedData) return;
+    const weightsToImport = Array.isArray(parsedData.weights) ? parsedData.weights : [];
+    const dietLogsToImport = Array.isArray(parsedData.dietLogs) ? parsedData.dietLogs : [];
+
     // 1. Merge Weights (dates are unique)
     setWeightLogs(prev => {
       const weightMap = new Map(prev.map(item => [item.date, item.weight]));
-      parsedData.weights.forEach(w => {
-        weightMap.set(w.date, w.weight);
+      weightsToImport.forEach(w => {
+        if (w && w.date && typeof w.weight === 'number') {
+          weightMap.set(w.date, w.weight);
+        }
       });
       return Array.from(weightMap.entries())
         .map(([date, weight]) => ({ date, weight }))
@@ -334,7 +340,8 @@ function App() {
       const updatedLogs = { ...prev };
       
       // Group the parsed list of dietLogs by date
-      const groupedImports = parsedData.dietLogs.reduce((acc, item) => {
+      const groupedImports = dietLogsToImport.reduce((acc, item) => {
+        if (!item || !item.date) return acc;
         const { date, ...food } = item;
         const logFood = {
           ...food,
@@ -366,7 +373,7 @@ function App() {
         </div>
         <div className="header-badge">
           <Sparkles size={12} />
-          <span>v1.3.4</span>
+          <span>v1.3.5</span>
         </div>
       </header>
 

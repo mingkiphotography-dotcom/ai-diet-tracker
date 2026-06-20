@@ -10,23 +10,29 @@ const AiLogModal = ({ isOpen, onClose, aiData, onConfirm }) => {
       // Calculate per-gram metrics to scale easily
       const itemsWithPerGram = aiData.items.map(item => {
         const amt = item.amount || 100;
+        const calories = typeof item.calories === 'number' ? item.calories : 0;
+        const protein = typeof item.protein === 'number' ? item.protein : 0;
+        const fat = typeof item.fat === 'number' ? item.fat : 0;
+        const carb = typeof item.carb === 'number' ? item.carb : 0;
+        const fiber = typeof item.fiber === 'number' ? item.fiber : 0;
+
         return {
           id: Math.random().toString(36).substring(2, 9),
           name: item.foodName,
           amount: amt,
           perGram: {
-            calories: item.calories / amt,
-            protein: item.protein / amt,
-            fat: item.fat / amt,
-            carb: item.carb / amt,
-            fiber: item.fiber / amt,
+            calories: calories / amt,
+            protein: protein / amt,
+            fat: fat / amt,
+            carb: carb / amt,
+            fiber: fiber / amt,
           },
           // Current scaled values
-          calories: item.calories,
-          protein: item.protein,
-          fat: item.fat,
-          carb: item.carb,
-          fiber: item.fiber,
+          calories: calories,
+          protein: protein,
+          fat: fat,
+          carb: carb,
+          fiber: fiber,
           mealType: item.mealType || 'lunch', // Default to AI parsed mealType
           isEstimated: item.isEstimated
         };
@@ -38,17 +44,37 @@ const AiLogModal = ({ isOpen, onClose, aiData, onConfirm }) => {
   if (!isOpen || !aiData) return null;
 
   const handleAmountChange = (id, newAmtStr) => {
-    const newAmt = parseFloat(newAmtStr) || 0;
+    const newAmt = newAmtStr === '' ? '' : (parseFloat(newAmtStr) || 0);
     setItems(prev => prev.map(item => {
       if (item.id === id) {
+        const numericAmt = newAmt === '' ? 0 : newAmt;
         return {
           ...item,
           amount: newAmt,
-          calories: Math.round(item.perGram.calories * newAmt),
-          protein: Number((item.perGram.protein * newAmt).toFixed(1)),
-          fat: Number((item.perGram.fat * newAmt).toFixed(1)),
-          carb: Number((item.perGram.carb * newAmt).toFixed(1)),
-          fiber: Number((item.perGram.fiber * newAmt).toFixed(1)),
+          calories: Math.round(item.perGram.calories * numericAmt),
+          protein: Number((item.perGram.protein * numericAmt).toFixed(1)),
+          fat: Number((item.perGram.fat * numericAmt).toFixed(1)),
+          carb: Number((item.perGram.carb * numericAmt).toFixed(1)),
+          fiber: Number((item.perGram.fiber * numericAmt).toFixed(1)),
+        };
+      }
+      return item;
+    }));
+  };
+
+  const handleNutrientChange = (id, field, valueStr) => {
+    const val = valueStr === '' ? '' : (parseFloat(valueStr) || 0);
+    setItems(prev => prev.map(item => {
+      if (item.id === id) {
+        const numericVal = val === '' ? 0 : val;
+        const amt = (typeof item.amount === 'number' ? item.amount : parseFloat(item.amount)) || 100;
+        return {
+          ...item,
+          [field]: val,
+          perGram: {
+            ...item.perGram,
+            [field]: numericVal / amt
+          }
         };
       }
       return item;
@@ -76,12 +102,12 @@ const AiLogModal = ({ isOpen, onClose, aiData, onConfirm }) => {
     if (items.length === 0) return;
     const finalItems = items.map(item => ({
       name: item.name,
-      amount: item.amount,
-      calories: item.calories,
-      protein: item.protein,
-      fat: item.fat,
-      carb: item.carb,
-      fiber: item.fiber,
+      amount: parseFloat(item.amount) || 0,
+      calories: Math.round(parseFloat(item.calories) || 0),
+      protein: Number((parseFloat(item.protein) || 0).toFixed(1)),
+      fat: Number((parseFloat(item.fat) || 0).toFixed(1)),
+      carb: Number((parseFloat(item.carb) || 0).toFixed(1)),
+      fiber: Number((parseFloat(item.fiber) || 0).toFixed(1)),
       mealType: item.mealType
     }));
     // Pass finalItems, parsed date and weight back
@@ -89,7 +115,7 @@ const AiLogModal = ({ isOpen, onClose, aiData, onConfirm }) => {
     onClose();
   };
 
-  const totalCals = items.reduce((sum, item) => sum + item.calories, 0);
+  const totalCals = items.reduce((sum, item) => sum + (parseFloat(item.calories) || 0), 0);
 
   return (
     <div className="modal-overlay">
@@ -208,20 +234,74 @@ const AiLogModal = ({ isOpen, onClose, aiData, onConfirm }) => {
                 </div>
 
                 {/* Calorie display */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '2px', color: 'var(--color-calories)', marginLeft: 'auto' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--color-calories)', marginLeft: 'auto' }}>
                   <Flame size={14} />
-                  <span style={{ fontFamily: 'var(--font-title)', fontWeight: '700', fontSize: '13px' }}>
-                    {item.calories} <span style={{ fontSize: '9px', fontWeight: '400' }}>kcal</span>
-                  </span>
+                  <input
+                    type="number"
+                    value={item.calories ?? ''}
+                    onChange={(e) => handleNutrientChange(item.id, 'calories', e.target.value)}
+                    style={{
+                      width: '50px',
+                      padding: '2px 4px',
+                      border: '1px solid var(--color-calories)',
+                      borderRadius: '4px',
+                      background: 'rgba(239, 68, 68, 0.05)',
+                      color: 'var(--color-calories)',
+                      fontFamily: 'var(--font-title)',
+                      fontWeight: '700',
+                      fontSize: '12px',
+                      outline: 'none',
+                      height: '24px',
+                      textAlign: 'center',
+                      margin: 0
+                    }}
+                  />
+                  <span style={{ fontSize: '9px', fontWeight: '400' }}>kcal</span>
                 </div>
               </div>
 
               {/* Nutrition breakdown */}
               <div className="ai-preview-grid">
-                <div>碳水: {item.carb}g</div>
-                <div>蛋白: {item.protein}g</div>
-                <div>脂肪: {item.fat}g</div>
-                <div>纤维: {item.fiber}g</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+                  <span>碳水:</span>
+                  <input 
+                    type="number" 
+                    step="0.1" 
+                    value={item.carb ?? ''} 
+                    onChange={(e) => handleNutrientChange(item.id, 'carb', e.target.value)} 
+                    style={{ width: '40px', padding: '2px 4px', border: '1px solid var(--border-color)', borderRadius: '4px', background: 'var(--card-bg)', color: 'var(--text-primary)', fontSize: '11px', outline: 'none', height: '20px', textAlign: 'center', margin: 0 }} 
+                  />g
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+                  <span>蛋白:</span>
+                  <input 
+                    type="number" 
+                    step="0.1" 
+                    value={item.protein ?? ''} 
+                    onChange={(e) => handleNutrientChange(item.id, 'protein', e.target.value)} 
+                    style={{ width: '40px', padding: '2px 4px', border: '1px solid var(--border-color)', borderRadius: '4px', background: 'var(--card-bg)', color: 'var(--text-primary)', fontSize: '11px', outline: 'none', height: '20px', textAlign: 'center', margin: 0 }} 
+                  />g
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+                  <span>脂肪:</span>
+                  <input 
+                    type="number" 
+                    step="0.1" 
+                    value={item.fat ?? ''} 
+                    onChange={(e) => handleNutrientChange(item.id, 'fat', e.target.value)} 
+                    style={{ width: '40px', padding: '2px 4px', border: '1px solid var(--border-color)', borderRadius: '4px', background: 'var(--card-bg)', color: 'var(--text-primary)', fontSize: '11px', outline: 'none', height: '20px', textAlign: 'center', margin: 0 }} 
+                  />g
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+                  <span>纤维:</span>
+                  <input 
+                    type="number" 
+                    step="0.1" 
+                    value={item.fiber ?? ''} 
+                    onChange={(e) => handleNutrientChange(item.id, 'fiber', e.target.value)} 
+                    style={{ width: '40px', padding: '2px 4px', border: '1px solid var(--border-color)', borderRadius: '4px', background: 'var(--card-bg)', color: 'var(--text-primary)', fontSize: '11px', outline: 'none', height: '20px', textAlign: 'center', margin: 0 }} 
+                  />g
+                </div>
               </div>
             </div>
           ))}
